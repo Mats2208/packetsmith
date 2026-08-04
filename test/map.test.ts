@@ -2,7 +2,7 @@
 // que hay que verificar es que la disposición sobreviva la escala: quién queda
 // arriba de quién, quién a la izquierda de quién, y que nada se pise.
 import { expect, test, describe } from "bun:test"
-import { drawMap, strokeFor } from "../src/topology/map.ts"
+import { drawMap, naturalWidth, strokeFor } from "../src/topology/map.ts"
 import type { Topology } from "../src/topology/model.ts"
 
 const dev = (name: string, model: string, x: number, y: number) => ({ name, model, x, y, ports: [] })
@@ -97,6 +97,30 @@ describe("drawMap", () => {
 
   test("no dibuja nada con un solo equipo", () => {
     expect(lines({ devices: [dev("R1", "2911", 10, 10)], links: [] })).toHaveLength(0)
+  })
+})
+
+describe("naturalWidth", () => {
+  // El plano se estiraba a todo el ancho disponible, así que en una terminal
+  // ancha una red chica quedaba desparramada: los nodos a media pantalla uno
+  // del otro y los enlaces convertidos en hilos que ya no dicen que dos cosas
+  // están conectadas. El tamaño lo pide la red, no la ventana.
+  test("una red chica pide bastante menos que una terminal ancha", () => {
+    expect(naturalWidth(LAB)).toBeLessThan(120)
+  })
+
+  test("crece con la fila más poblada, no con el total de equipos", () => {
+    // Diez equipos apilados en una columna necesitan MENOS ancho que cuatro
+    // uno al lado del otro.
+    const columna = {
+      devices: Array.from({ length: 10 }, (_, i) => dev(`D${i}`, "2960", 100, i * 50)),
+      links: [],
+    }
+    const fila = {
+      devices: Array.from({ length: 4 }, (_, i) => dev(`D${i}`, "2960", i * 50, 100)),
+      links: [],
+    }
+    expect(naturalWidth(columna)).toBeLessThan(naturalWidth(fila))
   })
 })
 

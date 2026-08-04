@@ -167,6 +167,24 @@ obvious in the plan and invisible in the tree; which switch a host hangs off is 
 the tree and a guess in the plan. Both need **links**, which is why the system prompt insists
 on `pt_export_topology` — `pt_query_topology` counts links but does not return them.
 
+The sidebar splits the same data twice more: **FABRIC** is the scaffold (icon and name, no
+addresses) and **DEVICES** is the per-device config (model, interfaces, IPs). Mixing them
+buried the scaffold under addresses and scattered the addresses across branch ends.
+
+### When the plan gets drawn
+
+Three conditions, all required, and this is the whole rule:
+
+1. at least two devices, **and** at least one link — without links there is no shape;
+2. some device has a non-zero coordinate — `pt_query_topology` returns everything at (0,0),
+   which would stack the whole network onto one cell;
+3. the layout **changed** since the last plan drawn (`layoutKey` — names, coordinates, link
+   count). Moving one device counts; that is exactly what the plan exists to show.
+
+Condition 3 is why an unchanged network drawn twice only appears once. Repeating an identical
+figure under every reply turns it into wallpaper and it stops being looked at. The sidebar
+always holds the current state; the plan is a log of what changed.
+
 ## Conventions
 
 - **Code comments in Spanish. Public docs (README, AGENTS.md, issues) in English.**

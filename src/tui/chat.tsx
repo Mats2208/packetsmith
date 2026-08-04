@@ -2,7 +2,7 @@
 // y arma los turnos es app.tsx.
 import { For, Show } from "solid-js"
 import type { Topology } from "../topology/model.ts"
-import { drawMap, type Ink } from "../topology/map.ts"
+import { drawMap, naturalWidth, type Ink } from "../topology/map.ts"
 import { C } from "./theme.ts"
 import { rule } from "./ascii.ts"
 import { GUTTER } from "./frame.tsx"
@@ -52,15 +52,34 @@ const INK: Record<Ink, string> = {
  * al otro del lienzo se ve acá y es invisible en el árbol.
  */
 function MapBlock(props: { topology: Topology; width: number }) {
+  // El dibujo pide el ancho que necesita y acá se lo recorta a lo que haya. Al
+  // revés —estirarlo a todo lo disponible— una red de diez equipos en una
+  // terminal ancha quedaba desparramada media pantalla.
+  const inner = () => Math.min(props.width - 2, naturalWidth(props.topology))
+
   // Debajo de este ancho el plano sale con nodos cortados, y un plano cortado
   // miente sobre la red. Mejor no dibujarlo.
   const rows = () =>
-    props.width < 30 ? [] : drawMap(props.topology, { width: props.width, maxHeight: 15 })
+    inner() < 30 ? [] : drawMap(props.topology, { width: inner(), maxHeight: 15 })
 
   return (
     <Show when={rows().length}>
-      <box style={{ flexDirection: "column", height: rows().length + 2, marginTop: 1 }}>
-        <text style={{ fg: C.rule }}>{rule("plano · canvas de PT", props.width)}</text>
+      {/* Enmarcado: el plano es una FIGURA, no más texto de la respuesta. Sin
+          el marco, sus líneas se confundían con la prosa de arriba y no se
+          sabía dónde empezaba ni dónde terminaba. */}
+      <box
+        style={{
+          flexDirection: "column",
+          width: inner() + 2,
+          height: rows().length + 2,
+          marginTop: 1,
+          flexShrink: 0,
+          border: true,
+          borderColor: C.rule,
+        }}
+        title=" PLANO · CANVAS DE PT "
+        titleAlignment="center"
+      >
         <For each={rows()}>
           {(spans) => (
             <box style={{ flexDirection: "row", height: 1 }}>

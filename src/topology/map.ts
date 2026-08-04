@@ -47,6 +47,25 @@ export function strokeFor(dx: number, dy: number): string {
  */
 const LABEL_MAX = 12
 
+/** Columnas por nodo en la fila más poblada. */
+const PER_NODE = 10
+
+/**
+ * Ancho que el dibujo PIDE, según cuántos equipos comparten la fila más llena.
+ *
+ * El plano se estiraba a todo el ancho disponible, así que en una terminal
+ * ancha una red de diez equipos quedaba desparramada: los nodos a media
+ * pantalla uno del otro y los enlaces convertidos en hilos larguísimos que ya
+ * no dicen que dos cosas están conectadas. El tamaño lo pide la red, no la
+ * ventana; quien llama después lo recorta a lo que tenga.
+ */
+export function naturalWidth(topo: Topology): number {
+  const porFila = new Map<number, number>()
+  for (const d of topo.devices) porFila.set(d.y, (porFila.get(d.y) ?? 0) + 1)
+  const masLlena = Math.max(1, ...porFila.values())
+  return masLlena * PER_NODE + LABEL_MAX + 4
+}
+
 /** Columnas libres a la derecha de un nodo antes del próximo de su misma fila. */
 function gapRight(
   at: Map<string, { c: number; r: number }>,
