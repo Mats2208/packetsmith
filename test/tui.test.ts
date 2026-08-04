@@ -178,14 +178,32 @@ describe("Canvas", () => {
     expect(frame).toContain("└── ")
   })
 
-  test("las IPs quedan a plomo por más hondo que esté el equipo", async () => {
-    // El relleno era relativo a la sangría, así que a tercer nivel el nombre se
-    // quedaba sin espacio y salía pegado: "SRV1192.168.1.10".
-    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
+  test("el andamio no lleva IPs: son de la otra sección", async () => {
+    // Mezcladas, ninguna de las dos se leía bien — el árbol quedaba tapado de
+    // direcciones y las direcciones sueltas al final de cada rama.
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 22)
+    const filas = frame.split("\n")
+    const fabric = filas.findIndex((l) => l.includes("FABRIC"))
+    const devices = filas.findIndex((l) => l.includes("DEVICES"))
+    expect(fabric).toBeGreaterThanOrEqual(0)
+    expect(devices).toBeGreaterThan(fabric)
+
+    for (const l of filas.slice(fabric, devices)) expect(l).not.toMatch(/\d+\.\d+\.\d+\.\d+/)
+  })
+
+  test("las IPs de la sección DEVICES quedan a plomo", async () => {
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 22)
     const cols = frame.split("\n")
       .filter((l) => /\d+\.\d+\.\d+\.\d+/.test(l))
       .map((l) => l.search(/\d+\.\d+\.\d+\.\d+/))
+    expect(cols.length).toBeGreaterThan(0)
     expect(new Set(cols).size).toBe(1)
+  })
+
+  test("cada equipo lista su modelo y sus interfaces", async () => {
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 22)
+    expect(frame).toContain("2911")
+    expect(frame).toContain("Gi0/1")
   })
 
   test("avisa cuando la lista viene sin enlaces", async () => {
@@ -215,7 +233,7 @@ describe("Canvas", () => {
   })
 
   test("muestra las IPs junto a cada equipo", async () => {
-    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 22)
     expect(frame).toContain("192.168.0.1")
   })
 
@@ -236,7 +254,13 @@ describe("a dónde se fue el tiempo", () => {
   })
 
   test("un turno sin tools es todo del modelo", () => {
-    expect(timingLine({ totalMs: 8000, toolMs: 0 })).toContain("(0%)")
+    expect(timingLine({ totalMs: 90_000, toolMs: 0 })).toContain("(0%)")
+  })
+
+  test("un turno corto muestra el total y nada más", () => {
+    // El total va SIEMPRE —es un parámetro del turno y queda para consultarlo
+    // después—, pero repartir ocho segundos entre bridge y modelo es ruido.
+    expect(timingLine({ totalMs: 8000, toolMs: 2000 })).toBe("⏱ 8s")
   })
 
   test("los badges muestran el tiempo solo cuando es notorio", () => {

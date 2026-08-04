@@ -68,36 +68,66 @@ function Census(props: { topology: Topology }) {
   )
 }
 
+/**
+ * Una fila del andamio: solo ícono y nombre.
+ *
+ * Sin IPs a propósito. El árbol contesta CÓMO está armada la red; la
+ * configuración de cada equipo vive abajo, en su propia sección. Mezclarlas
+ * hacía que ninguna de las dos se leyera bien: el andamio quedaba tapado de
+ * direcciones y las direcciones, sueltas al final de cada rama.
+ */
 function Row(props: { device: Device; prefix: string }) {
   const kind = () => kindOf(props.device.model)
-  const ips = () => addressesOf(props.device)
-
-  // Nombre e ícono se rellenan hasta una columna FIJA, no relativa a la
-  // sangría: así las IPs quedan todas a plomo por más hondo que esté el equipo.
-  // Con el relleno relativo, un host de tercer nivel se quedaba sin espacio y
-  // salía "SRV1192.168.1.10".
-  const label = () => {
-    const raw = `${ICON[kind()]} ${props.device.name}`
-    const room = IP_COL - props.prefix.length
-    return raw.length >= room ? raw.slice(0, room - 2) + "… " : raw.padEnd(room)
-  }
-
   return (
     <text style={{ fg: C.rule }}>
       {/* La guía va en tono de estructura y el equipo en el suyo: así el árbol
           se lee como andamio y los nombres no compiten con las líneas. */}
       {props.prefix}
-      <span style={{ fg: NODE[kind()] ?? NODE.other }}>{label()}</span>
-      <Show when={ips().length}>
-        <span style={{ fg: C.dim }}>{ips()[0]}</span>
-      </Show>
-      {/* Un router con varias IPs: la segunda se insinúa, no compite. */}
-      <Show when={ips().length > 1}>
-        <span style={{ fg: C.rule }}>{` +${ips().length - 1}`}</span>
-      </Show>
+      <span style={{ fg: NODE[kind()] ?? NODE.other }}>
+        {`${ICON[kind()]} ${props.device.name}`.slice(0, INNER - props.prefix.length)}
+      </span>
     </text>
   )
 }
+
+/**
+ * La configuración individual, equipo por equipo.
+ *
+ * Es la otra mitad de la pregunta: el andamio dice de qué cuelga cada cosa,
+ * esto dice qué es y con qué está configurada. Un equipo sin ninguna interfaz
+ * con IP igual aparece —un switch de acceso puro es información, no un hueco.
+ */
+function Devices(props: { topology: Topology }) {
+  const ordenados = () =>
+    [...props.topology.devices].sort((a, b) => {
+      const d = ORDER.indexOf(kindOf(a.model)) - ORDER.indexOf(kindOf(b.model))
+      return d !== 0 ? d : a.name.localeCompare(b.name)
+    })
+
+  return (
+    <For each={ordenados()}>
+      {(d) => (
+        <>
+          <text style={{ fg: NODE[kindOf(d.model)] ?? NODE.other }}>
+            {`${ICON[kindOf(d.model)]} ${d.name}`.padEnd(IP_COL).slice(0, IP_COL)}
+            <span style={{ fg: C.rule }}>{d.model.slice(0, INNER - IP_COL)}</span>
+          </text>
+          <For each={d.ports.filter((p) => p.ip)}>
+            {(p) => (
+              <text style={{ fg: C.rule }}>
+                {`    ${p.name}`.padEnd(IP_COL).slice(0, IP_COL)}
+                <span style={{ fg: C.dim }}>{p.ip!.split("/")[0]}</span>
+              </text>
+            )}
+          </For>
+        </>
+      )}
+    </For>
+  )
+}
+
+/** De arriba hacia abajo de la pila, igual que el censo. */
+const ORDER: Kind[] = ["router", "switch", "wireless", "cloud", "host", "other"]
 
 /**
  * Guías del árbol.
@@ -197,37 +227,47 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
             </box>
           }
         >
-          <Show
-            when={links()}
-            fallback={
-              // Sin enlaces no hay jerarquía: se agrupa por /24, que es la
-              // estructura que importa en un lab. Y se DICE que está degradado:
-              // una lista plana sin aviso se lee como si esa fuera la red, y
-              // `pt_query_topology` no devuelve enlaces aunque los cuente.
-              <>
-                <text style={{ fg: C.warn }}>{"⚠ sin enlaces — lista plana"}</text>
-                <text style={{ fg: C.rule }}>{"  pedí pt_export_topology"}</text>
-                <box style={{ height: 1 }} />
-                <For each={groupBySubnet(props.topology)}>
-                  {(g) => (
-                    <>
-                      <text style={{ fg: C.rule }}>{rule(g.label, INNER)}</text>
-                      <For each={g.devices}>{(d) => <Row device={d} prefix=" " />}</For>
-                    </>
-                  )}
-                </For>
-              </>
-            }
-          >
-            <text style={{ fg: C.rule }}>{rule("fabric", INNER)}</text>
-            {/* Cada raíz va como `last`: los routers no son hermanos entre sí
-                colgando de un padre común, son árboles distintos. Marcarlos
-                como no-últimos dibujaba una vertical bajo el primero que
-                sugería un parentesco que no existe. */}
-            <For each={forest()}>
-              {(n) => <TreeNode node={n} ancestors={[]} last />}
-            </For>
-          </Show>
+          <>
+            {/* Dos secciones que contestan preguntas distintas: el andamio dice
+                de qué cuelga cada equipo, la lista dice qué es y con qué está
+                configurado. Antes iban mezcladas y ninguna se leía bien. */}
+            <Show
+              when={links()}
+              fallback={
+                // Sin enlaces no hay jerarquía: se agrupa por /24, que es la
+                // estructura que importa en un lab. Y se DICE que está
+                // degradado: una lista plana sin aviso se lee como si esa fuera
+                // la red, y `pt_query_topology` no devuelve enlaces aunque los
+                // cuente.
+                <>
+                  <text style={{ fg: C.warn }}>{"⚠ sin enlaces — lista plana"}</text>
+                  <text style={{ fg: C.rule }}>{"  pedí pt_export_topology"}</text>
+                  <box style={{ height: 1 }} />
+                  <For each={groupBySubnet(props.topology)}>
+                    {(g) => (
+                      <>
+                        <text style={{ fg: C.rule }}>{rule(g.label, INNER)}</text>
+                        <For each={g.devices}>{(d) => <Row device={d} prefix=" " />}</For>
+                      </>
+                    )}
+                  </For>
+                </>
+              }
+            >
+              <text style={{ fg: C.rule }}>{rule("fabric", INNER)}</text>
+              {/* Cada raíz va como `last`: los routers no son hermanos entre sí
+                  colgando de un padre común, son árboles distintos. Marcarlos
+                  como no-últimos dibujaba una vertical bajo el primero que
+                  sugería un parentesco que no existe. */}
+              <For each={forest()}>
+                {(n) => <TreeNode node={n} ancestors={[]} last />}
+              </For>
+            </Show>
+
+            <box style={{ height: 1 }} />
+            <text style={{ fg: C.rule }}>{rule("devices", INNER)}</text>
+            <Devices topology={props.topology} />
+          </>
         </Show>
       </scrollbox>
 
