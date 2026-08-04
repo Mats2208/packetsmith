@@ -55,28 +55,53 @@ const PLAN = JSON.stringify(
 const READY: AgentEvent = {
   type: "ready",
   sessionId: "preview",
-  model: "claude-opus-5",
-  tools: new Array(61).fill("t"),
+  model: "claude-opus-5[1m]",
+  tools: new Array(178).fill("t"),
 }
-const BUILD = { id: "1", name: "mcp__packet-tracer__pt_full_build" }
-const PING = { id: "2", name: "mcp__packet-tracer__pt_verify_connectivity" }
-const HARDEN = { id: "3", name: "mcp__packet-tracer__pt_apply_hardening" }
+const LIMITS: AgentEvent = {
+  type: "limits",
+  limits: { window: "five_hour", status: "allowed", resetsAt: 0 },
+}
+const tool = (id: string, name: string) => ({ id, name: `mcp__packet-tracer__${name}` })
+const BUILD = tool("1", "pt_full_build")
+const PING = tool("2", "pt_verify_connectivity")
+const HARDEN = tool("3", "pt_apply_hardening")
+const VLANS = tool("4", "pt_read_vlans")
+const PORTS = tool("5", "pt_inspect_ports")
 
 const ESCENAS: Record<string, AgentEvent[]> = {
-  arranque: [READY],
+  arranque: [READY, LIMITS],
+
+  razonando: [
+    READY,
+    LIMITS,
+    { type: "phase", phase: "thinking" },
+    { type: "thinking", tokens: 1840 },
+  ],
 
   trabajando: [
     READY,
+    LIMITS,
     { type: "tool_start", ...BUILD, input: {} },
     { type: "tool_end", ...BUILD, output: `Build OK\n${PLAN}`, isError: false },
+    { type: "tool_start", ...VLANS, input: {} },
+    { type: "tool_end", ...VLANS, output: "5 VLANs", isError: false },
+    { type: "tool_start", ...PORTS, input: {} },
+    { type: "tool_end", ...PORTS, output: "ok", isError: false },
     { type: "tool_start", ...PING, input: {} },
     { type: "text", delta: "Cableado listo. Verifico conectividad extremo a extremo…" },
+    { type: "phase", phase: "tool", detail: "mcp__packet-tracer__pt_verify_connectivity" },
   ],
 
   desplegado: [
     READY,
+    LIMITS,
     { type: "tool_start", ...BUILD, input: {} },
     { type: "tool_end", ...BUILD, output: `Build OK\n${PLAN}`, isError: false },
+    { type: "tool_start", ...VLANS, input: {} },
+    { type: "tool_end", ...VLANS, output: "5 VLANs", isError: false },
+    { type: "tool_start", ...PORTS, input: {} },
+    { type: "tool_end", ...PORTS, output: "ok", isError: false },
     { type: "tool_start", ...PING, input: {} },
     { type: "tool_end", ...PING, output: "4/4 OK", isError: false },
     { type: "tool_start", ...HARDEN, input: {} },
@@ -84,11 +109,15 @@ const ESCENAS: Record<string, AgentEvent[]> = {
     {
       type: "turn_end",
       costUsd: 0.2144,
+      usage: { tokens: 43_500, contextWindow: 1_000_000 },
       text:
         "Listo. Dos LAN con OSPF entre R1 y R2.\n\n" +
+        "## Verificación\n\n" +
         "| Prueba | Resultado |\n|---|---|\n| PC1 → SRV1 | 4/4 |\n| PC3 → PC1 | 4/4 |\n\n" +
-        "El hardening falló: `login local` sin usuarios dejaría las VTY inservibles.",
+        "El hardening falló: `login local` sin usuarios dejaría las VTY inservibles.\n\n" +
+        "Si querés lo arreglo creando un usuario local antes de tocar las VTY.",
     },
+    { type: "phase", phase: "idle" },
   ],
 }
 
