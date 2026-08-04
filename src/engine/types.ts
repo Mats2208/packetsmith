@@ -8,6 +8,42 @@ export interface StartOpts {
   cwd?: string
 }
 
+/**
+ * En qué anda el agente ahora mismo.
+ *
+ * No se deduce: el CLI lo dice, y hasta ahora lo tirábamos. Sin esto la única
+ * señal de vida era que apareciera texto, así que los tramos de razonamiento
+ * —que en un modelo con thinking son la mayor parte de la espera— se veían
+ * exactamente igual que estar colgado.
+ */
+export type Phase =
+  /** Nadie trabaja: el turno cerró. */
+  | "idle"
+  /** Pedido en vuelo, todavía no llegó el primer token. */
+  | "requesting"
+  /** Razonando. Trae los tokens estimados en `thinking`. */
+  | "thinking"
+  /** Escribiendo la respuesta. */
+  | "writing"
+  /** Corriendo una tool; `detail` trae cuál. */
+  | "tool"
+
+/** Cuánto del contexto va ocupado. Sale del `result` al cerrar el turno. */
+export interface Usage {
+  tokens: number
+  contextWindow: number
+}
+
+/** Ventana de cuota del plan. La reporta el CLI sin que haya que pedirla. */
+export interface Limits {
+  /** `five_hour`, `seven_day`. */
+  window: string
+  /** `allowed`, `allowed_warning`, `rejected`. */
+  status: string
+  /** Epoch en segundos. */
+  resetsAt: number
+}
+
 export type AgentEvent =
   /** Fragmento de texto según llega. La UI lo va concatenando. */
   | { type: "text"; delta: string }
@@ -19,9 +55,15 @@ export type AgentEvent =
    */
   | { type: "tool_end"; id: string; name: string; output: unknown; isError: boolean }
   /** Fin de UN turno. La sesión sigue viva esperando el siguiente. */
-  | { type: "turn_end"; costUsd: number; text: string }
+  | { type: "turn_end"; costUsd: number; text: string; usage?: Usage }
   /** Datos de la sesión, llegan una vez al arrancar. */
   | { type: "ready"; sessionId: string; model: string; tools: string[] }
+  /** Cambió lo que el agente está haciendo. */
+  | { type: "phase"; phase: Phase; detail?: string }
+  /** Tokens de razonamiento acumulados en el tramo en curso. */
+  | { type: "thinking"; tokens: number }
+  /** Estado de la cuota del plan. */
+  | { type: "limits"; limits: Limits }
   /** El CLI falló o emitió algo que no supimos leer. Nunca se traga en silencio. */
   | { type: "error"; message: string }
 

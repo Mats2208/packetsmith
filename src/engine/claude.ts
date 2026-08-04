@@ -66,10 +66,48 @@ export function* translate(
           tools: Array.isArray(ev.tools) ? ev.tools.map(String) : [],
         }
       }
+      // El CLI avisa cuándo tiene un pedido en vuelo. Es el único tramo en el
+      // que NO llega nada más: sin esto, esperar la primera respuesta y estar
+      // colgado se ven igual.
+      if (ev.subtype === "status" && ev.status === "requesting") {
+        yield { type: "phase", phase: "requesting" }
+      }
+      if (ev.subtype === "thinking_tokens") {
+        yield { type: "thinking", tokens: Number(ev.estimated_tokens ?? 0) }
+      }
       return
+
+    // La cuota del plan viaja en el stream. No hace falta leer el token de
+    // OAuth del disco ni pegarle a un endpoint aparte, que es lo que hay que
+    // hacer desde afuera del CLI.
+    case "rate_limit_event": {
+      const info = ev.rate_limit_info
+      if (!info) return
+      yield {
+        type: "limits",
+        limits: {
+          window: String(info.rateLimitType ?? ""),
+          status: String(info.status ?? ""),
+          resetsAt: Number(info.resetsAt ?? 0),
+        },
+      }
+      return
+    }
 
     case "stream_event": {
       const inner = ev.event
+
+      // El tipo de bloque que arranca dice en qué anda: razonar, escribir o
+      // llamar una tool. Los tres se veían igual —silencio— hasta ahora.
+      if (inner?.type === "content_block_start") {
+        const kind = inner.content_block?.type
+        if (kind === "thinking") yield { type: "phase", phase: "thinking" }
+        if (kind === "text") yield { type: "phase", phase: "writing" }
+        if (kind === "tool_use") {
+          yield { type: "phase", phase: "tool", detail: String(inner.content_block?.name ?? "") }
+        }
+      }
+
       if (inner?.type === "content_block_delta" && inner.delta?.type === "text_delta") {
         yield { type: "text", delta: String(inner.delta.text ?? "") }
       }
@@ -110,14 +148,47 @@ export function* translate(
       return
     }
 
-    case "result":
+    case "result": {
+      const usage = readUsage(ev)
       yield {
         type: "turn_end",
         costUsd: Number(ev.total_cost_usd ?? 0),
         text: String(ev.result ?? ""),
+        ...(usage ? { usage } : {}),
       }
+      yield { type: "phase", phase: "idle" }
       return
+    }
   }
+}
+
+/**
+ * Cuánto contexto quedó ocupado después del turno.
+ *
+ * Se suman los cuatro contadores porque los tres de entrada —directa, caché
+ * leído y caché escrito— ocupan ventana igual: mirar solo `input_tokens` daba
+ * 2 sobre un millón después de un turno que había leído 15k de caché.
+ *
+ * La ventana sale de `modelUsage`, que trae una entrada por modelo usado —los
+ * subagentes de haiku aparecen ahí con sus 200k. Se busca la del modelo de la
+ * sesión y, si no está, se toma la ventana más grande: el modelo principal es
+ * siempre el de más contexto, nunca un subagente.
+ */
+export function readUsage(ev: Record<string, any>): { tokens: number; contextWindow: number } | undefined {
+  const u = ev.usage
+  if (!u) return undefined
+
+  const tokens =
+    Number(u.input_tokens ?? 0) +
+    Number(u.cache_read_input_tokens ?? 0) +
+    Number(u.cache_creation_input_tokens ?? 0) +
+    Number(u.output_tokens ?? 0)
+
+  const models: Record<string, any> = ev.modelUsage ?? {}
+  const windows = Object.values(models).map((m: any) => Number(m?.contextWindow ?? 0))
+  const contextWindow = Number(models[ev.model]?.contextWindow ?? 0) || Math.max(0, ...windows)
+
+  return contextWindow ? { tokens, contextWindow } : undefined
 }
 
 /** Un mensaje del usuario en el formato que espera `--input-format stream-json`. */
