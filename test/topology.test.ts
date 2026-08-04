@@ -215,3 +215,41 @@ describe("groupBySubnet", () => {
     expect(groups[groups.length - 1]!.devices[0]!.name).toBe("SW1")
   })
 })
+
+describe("construcción incremental", () => {
+  // El agente arma la topología con decenas de add_device/add_link. Sin
+  // escuchar esas, el panel quedaba congelado durante todo el build y
+  // mostraba "0 LINKS" aunque el agente hubiera cableado 13.
+  const created = (n: string, m: string) =>
+    JSON.stringify({ result: `Device '${n}' (${m}) created at (100, 200).` })
+
+  test("add_device suma el equipo al panel", () => {
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_add_device", created("SW-CORE", "3560-24PS"))
+    expect(t.devices).toHaveLength(1)
+    expect(t.devices[0]).toMatchObject({ name: "SW-CORE", model: "3560-24PS", x: 100, y: 200 })
+  })
+
+  test("add_link suma el enlace", () => {
+    let t = ingest(EMPTY, "mcp__packet-tracer__pt_add_device", created("R1", "2911"))
+    t = ingest(t, "mcp__packet-tracer__pt_add_link",
+      JSON.stringify({ result: "Link created: R1/GigabitEthernet0/0 <--[straight]--> SW1/GigabitEthernet0/1" }))
+    expect(t.links).toHaveLength(1)
+    expect(t.links[0]).toMatchObject({ a: { device: "R1" }, b: { device: "SW1" } })
+  })
+
+  test("delete_device se lleva sus enlaces", () => {
+    // Si el equipo se va pero sus enlaces quedan, el árbol referencia fantasmas.
+    let t = ingest(EMPTY, "mcp__packet-tracer__pt_add_device", created("R1", "2911"))
+    t = ingest(t, "mcp__packet-tracer__pt_add_link",
+      JSON.stringify({ result: "Link created: R1/Gi0/0 <--[straight]--> SW1/Gi0/1" }))
+    t = ingest(t, "mcp__packet-tracer__pt_delete_device",
+      JSON.stringify({ result: "Device 'R1' deleted from the topology." }))
+    expect(t.devices).toHaveLength(0)
+    expect(t.links).toHaveLength(0)
+  })
+
+  test("una salida que no matchea no rompe el estado", () => {
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_add_device", '{"result":"DUPLICATE: ya existe"}')
+    expect(t).toBe(EMPTY)
+  })
+})

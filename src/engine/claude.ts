@@ -67,6 +67,12 @@ export function* translate(
       if (inner?.type === "content_block_delta" && inner.delta?.type === "text_delta") {
         yield { type: "text", delta: String(inner.delta.text ?? "") }
       }
+      // Claude emite UN bloque de texto por tramo de razonamiento —típicamente
+      // uno antes de cada tool. Sin separarlos, el final de uno se pega al
+      // comienzo del siguiente: "…en el canvas.Bridge conectado. Reviso…".
+      if (inner?.type === "content_block_stop") {
+        yield { type: "text", delta: "\n\n" }
+      }
       return
     }
 

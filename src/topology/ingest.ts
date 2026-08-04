@@ -174,11 +174,51 @@ export function parseFullBuild(text: string): Topology | null {
  * los que había en vez de dejar el árbol plano.
  */
 export function ingest(current: Topology, toolName: string, output: unknown): Topology {
+  const text = unwrapToolOutput(output)
+
+  // Construcción incremental. El agente arma una topología con decenas de
+  // pt_add_device / pt_add_link, y si solo se escucharan las tools de lectura
+  // el panel se quedaría congelado durante todo el build —que es justo cuando
+  // hay algo interesante que mirar— y además borrar equipos no se reflejaría.
+  if (/pt_add_link/.test(toolName)) {
+    // El nombre del equipo llega hasta el PRIMER '/': un \S+ codicioso se come
+    // medio nombre de puerto (R1/GigabitEthernet0 en vez de R1).
+    const m = /Link created: ([^/\s]+)\/(\S+) <--\[[^\]]*\]--> ([^/\s]+)\/(\S+)/.exec(text)
+    if (!m) return current
+    return {
+      devices: current.devices,
+      links: [...current.links, {
+        a: { device: m[1]!, port: m[2]! },
+        b: { device: m[3]!, port: m[4]! },
+        wireless: false,
+      }],
+    }
+  }
+
+  if (/pt_delete_device/.test(toolName)) {
+    const m = /Device '(.+?)' deleted/.exec(text)
+    if (!m) return current
+    const gone = m[1]!
+    return {
+      devices: current.devices.filter((d) => d.name !== gone),
+      links: current.links.filter((l) => l.a.device !== gone && l.b?.device !== gone),
+    }
+  }
+
+  if (/pt_add_device/.test(toolName)) {
+    const m = /Device '(.+?)' \((.+?)\) created at \((-?\d+), (-?\d+)\)/.exec(text)
+    if (!m) return current
+    return {
+      devices: [...current.devices, {
+        name: m[1]!, model: m[2]!, x: Number(m[3]), y: Number(m[4]), ports: [],
+      }],
+      links: current.links,
+    }
+  }
+
   if (!/pt_(full_build|export_topology|query_topology)/.test(toolName)) return current
 
-  const text = unwrapToolOutput(output)
-  const next =
-    parseFullBuild(text) ?? parseExportTopology(text) ?? parseQueryTopology(text)
+  const next = parseFullBuild(text) ?? parseExportTopology(text) ?? parseQueryTopology(text)
   if (!next) return current
 
   // query_topology no trae enlaces: si ya teníamos, se conservan.

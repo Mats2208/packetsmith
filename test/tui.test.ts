@@ -137,3 +137,33 @@ describe("Canvas", () => {
     expect(frame).toContain("3 NODES / 2 LINKS")
   })
 })
+
+describe("markdown selectivo", () => {
+  test("los encabezados se destacan sin dejar los ##", async () => {
+    const turns: Turn[] = [{ role: "agent", text: "## Verificación\ntodo ok" }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
+    expect(frame).toContain("VERIFICACIÓN")
+    expect(frame).not.toContain("##")
+  })
+
+  test("las tablas se alinean en columnas", async () => {
+    // Una tabla desalineada es peor que no tenerla: el pipe crudo no dice nada.
+    const turns: Turn[] = [{
+      role: "agent",
+      text: "| Prueba | Resultado |\n|---|---|\n| PC1 → SRV | 4/4 |",
+    }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }), 70, 12)
+    expect(frame).toContain("Prueba")
+    expect(frame).toContain("4/4")
+    expect(frame).not.toContain("|---|")
+  })
+
+  test("el bold y el código inline pierden el marcado, no el texto", async () => {
+    const turns: Turn[] = [{ role: "agent", text: "**Antes:** 9 equipos con `Gi0/1`" }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
+    expect(frame).toContain("Antes:")
+    expect(frame).toContain("Gi0/1")
+    expect(frame).not.toContain("**")
+    expect(frame).not.toContain("`")
+  })
+})

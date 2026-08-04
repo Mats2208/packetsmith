@@ -16,26 +16,67 @@ export function shortToolName(name: string): string {
 }
 
 /**
- * Parte el texto en tramos de prosa y bloques de código.
+ * Trocea el texto en las piezas que la UI sabe dibujar.
  *
- * Se renderiza markdown SELECTIVO a propósito: pasarlo entero por un renderer
- * borra el aire de terminal, pero dejar los ``` crudos hace ilegible cualquier
- * respuesta con CLI de Cisco adentro, que es la mitad de lo que este agente
- * responde.
+ * Markdown SELECTIVO a propósito: pasar todo por un renderer borra el aire de
+ * terminal, pero dejarlo crudo hace ilegible cualquier respuesta con CLI de
+ * Cisco, tablas de verificación o encabezados — que es la mitad de lo que este
+ * agente responde.
  */
-export function splitCode(text: string): { code: boolean; text: string }[] {
-  const out: { code: boolean; text: string }[] = []
-  const re = /```[^\n]*\n([\s\S]*?)```/g
+export type Piece =
+  | { kind: "code"; text: string }
+  | { kind: "head"; text: string }
+  | { kind: "rule" }
+  | { kind: "row"; cells: string[] }
+  | { kind: "bullet"; text: string }
+  | { kind: "text"; text: string }
+
+const FENCE = /```[^\n]*\n([\s\S]*?)```/g
+
+/** Quita el marcado inline que no se puede pintar y deja el contenido. */
+export function stripInline(s: string): string {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/, "")
+}
+
+export function parseBlocks(text: string): Piece[] {
+  const out: Piece[] = []
   let last = 0
   let m: RegExpExecArray | null
 
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push({ code: false, text: text.slice(last, m.index) })
-    out.push({ code: true, text: m[1]!.replace(/\n$/, "") })
+  const prose = (chunk: string) => {
+    for (const raw of chunk.split("\n")) {
+      const line = raw.trimEnd()
+      if (!line.trim()) continue
+
+      // Separador de tabla: |---|---| no aporta nada en un panel angosto.
+      if (/^\s*\|[\s\-:|]+\|\s*$/.test(line)) { out.push({ kind: "rule" }); continue }
+
+      if (/^\s*\|.*\|\s*$/.test(line)) {
+        out.push({
+          kind: "row",
+          cells: line.trim().slice(1, -1).split("|").map((c) => stripInline(c.trim())),
+        })
+        continue
+      }
+      if (/^#{1,6}\s+/.test(line)) { out.push({ kind: "head", text: stripInline(line) }); continue }
+      if (/^\s*[-*]\s+/.test(line)) {
+        out.push({ kind: "bullet", text: stripInline(line.replace(/^\s*[-*]\s+/, "")) })
+        continue
+      }
+      out.push({ kind: "text", text: stripInline(line) })
+    }
+  }
+
+  while ((m = FENCE.exec(text))) {
+    if (m.index > last) prose(text.slice(last, m.index))
+    out.push({ kind: "code", text: m[1]!.replace(/\n$/, "") })
     last = m.index + m[0].length
   }
-  if (last < text.length) out.push({ code: false, text: text.slice(last) })
-  return out.filter((p) => p.text.trim())
+  if (last < text.length) prose(text.slice(last))
+  return out
 }
 
 /**
@@ -78,25 +119,42 @@ function Tools(props: { tools: NonNullable<Turn["tools"]> }) {
         <text style={{ fg: C.alert }}>{`    ✗ ${s().failed.join(", ")}`}</text>
       </Show>
       <Show when={s().ok.length}>
-        <text style={{ fg: C.rule }}>{`    ${s().ok.join(" · ")}`}</text>
+        <text style={{ fg: C.dim }}>{`    ${s().ok.join(" · ")}`}</text>
       </Show>
     </>
   )
 }
 
-/** Prosa y código; el código va con fondo propio para que se despegue. */
+/** Cada pieza con su tratamiento. La jerarquía la hace el color, no el tamaño:
+ *  en un terminal todas las letras miden lo mismo. */
 function Body(props: { text: string }) {
   return (
-    <For each={splitCode(props.text)}>
-      {(part) =>
-        part.code ? (
-          <box style={{ backgroundColor: C.sunken, paddingLeft: 1, marginTop: 1, marginBottom: 1 }}>
-            <text style={{ fg: C.fg }}>{part.text}</text>
-          </box>
-        ) : (
-          <text>{part.text.trim()}</text>
-        )
-      }
+    <For each={parseBlocks(props.text)}>
+      {(p) => {
+        switch (p.kind) {
+          case "code":
+            return (
+              <box style={{ backgroundColor: C.sunken, paddingLeft: 1, marginTop: 1, marginBottom: 1 }}>
+                <text style={{ fg: C.fg }}>{p.text}</text>
+              </box>
+            )
+          case "head":
+            return <text style={{ fg: C.fg }}>{`\n── ${p.text.toUpperCase()}`}</text>
+          case "rule":
+            return <text style={{ fg: C.rule }}>{"  " + "─".repeat(28)}</text>
+          case "row":
+            // Columnas de ancho fijo: una tabla desalineada es peor que ninguna.
+            return (
+              <text style={{ fg: C.dim }}>
+                {"  " + p.cells.map((c) => c.padEnd(16).slice(0, 16)).join(" ")}
+              </text>
+            )
+          case "bullet":
+            return <text style={{ fg: C.dim }}>{`  · ${p.text}`}</text>
+          default:
+            return <text>{p.text}</text>
+        }
+      }}
     </For>
   )
 }
