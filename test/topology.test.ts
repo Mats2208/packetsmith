@@ -3,7 +3,7 @@
 import { expect, test, describe } from "bun:test"
 import { ingest, parseExportTopology, unwrapToolOutput, EMPTY } from "../src/topology/ingest.ts"
 import { kindOf, type Kind } from "../src/topology/model.ts"
-import { groupBySubnet } from "../src/topology/tree.ts"
+import { censusOf, groupBySubnet } from "../src/topology/tree.ts"
 
 const EXPORT = `=== Topology Export: 4 devices, 3 links ===
 
@@ -213,6 +213,41 @@ describe("groupBySubnet", () => {
     const groups = groupBySubnet(t)
     expect(groups[groups.length - 1]!.label).toBe("sin IP")
     expect(groups[groups.length - 1]!.devices[0]!.name).toBe("SW1")
+  })
+})
+
+describe("censusOf", () => {
+  const dev = (name: string, model: string) => ({ name, model, x: 0, y: 0, ports: [] })
+
+  test("cuenta por familia y de arriba hacia abajo de la pila", () => {
+    const topo = {
+      devices: [
+        dev("PC1", "PC-PT"), dev("PC2", "PC-PT"), dev("PC3", "PC-PT"), dev("PC4", "PC-PT"),
+        dev("SW1", "2960"), dev("SW2", "2960"),
+        dev("R1", "2911"),
+      ],
+      links: [],
+    }
+    expect(censusOf(topo).map((t) => [t.kind, t.count])).toEqual([
+      ["router", 1], ["switch", 2], ["host", 4],
+    ])
+  })
+
+  test("la barra se escala contra el máximo, no contra el total", () => {
+    // Contra el total, en un lab donde los hosts son mayoría, routers y
+    // switches quedan en un muñón de una celda y las barras dejan de comparar.
+    const topo = {
+      devices: [dev("R1", "2911"), ...Array.from({ length: 20 }, (_, i) => dev(`PC${i}`, "PC-PT"))],
+      links: [],
+    }
+    const census = censusOf(topo)
+    expect(census.find((t) => t.kind === "host")!.share).toBe(1)
+    expect(census.find((t) => t.kind === "router")!.share).toBeCloseTo(0.05)
+  })
+
+  test("no inventa familias que no están en la red", () => {
+    expect(censusOf({ devices: [dev("R1", "2911")], links: [] }).map((t) => t.kind)).toEqual(["router"])
+    expect(censusOf(EMPTY)).toHaveLength(0)
   })
 })
 

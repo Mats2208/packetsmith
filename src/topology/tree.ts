@@ -3,7 +3,7 @@
 // PT no guarda ninguna jerarquía: da una lista plana de equipos y otra de
 // enlaces. El árbol se deduce siguiendo los enlaces desde cada router, que es
 // como se lee una topología de laboratorio.
-import type { Device, Topology } from "./model.ts"
+import type { Device, Kind, Topology } from "./model.ts"
 import { kindOf } from "./model.ts"
 
 export interface Node {
@@ -54,6 +54,39 @@ export function buildForest(topo: Topology): Node[] {
 
   return [...roots, ...orphans]
 }
+
+/** Cuántos equipos hay de cada familia, para el censo del panel. */
+export interface Tally {
+  kind: Kind
+  count: number
+  /** Fracción sobre la familia más numerosa: es lo que dibuja la barra. */
+  share: number
+}
+
+/**
+ * Censo por familia, ya normalizado para dibujarlo como barras.
+ *
+ * Se escala contra el MÁXIMO y no contra el total: en un lab los hosts siempre
+ * son mayoría, así que contra el total las barras de routers y switches quedan
+ * en un muñón de una celda y dejan de comparar nada.
+ */
+export function censusOf(topo: Topology): Tally[] {
+  const counts = new Map<Kind, number>()
+  for (const d of topo.devices) {
+    const k = kindOf(d.model)
+    counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+
+  const max = Math.max(1, ...counts.values())
+  return ORDER.filter((k) => counts.has(k)).map((kind) => ({
+    kind,
+    count: counts.get(kind)!,
+    share: counts.get(kind)! / max,
+  }))
+}
+
+/** De arriba hacia abajo de la pila: el orden en que se lee una topología. */
+const ORDER: Kind[] = ["router", "switch", "wireless", "cloud", "host", "other"]
 
 /** IPs de un equipo, sin la máscara, para que entren en el panel. */
 export function addressesOf(d: Device): string[] {
