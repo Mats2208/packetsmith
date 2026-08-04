@@ -20,6 +20,7 @@
 //   result    → total_cost_usd, result   (fin de turno, NO de sesión)
 import type { AgentEvent, Engine, Session, StartOpts } from "./types.ts"
 import { jsonLines } from "./stream.ts"
+import { SYSTEM_PROMPT } from "./prompt.ts"
 
 export function buildArgs(opts: StartOpts): string[] {
   const args = [
@@ -32,6 +33,11 @@ export function buildArgs(opts: StartOpts): string[] {
     // interactiva, y TODA tool falla. Era la razón de que el panel de
     // topología nunca se llenara.
     "--permission-mode", "bypassPermissions",
+    // Sin esto el agente es Claude Code generico: no sabe que hay un panel de
+    // topologia a la derecha ni que el ancho util son ~70 columnas, asi que
+    // contesta con informes largos y repite en prosa lo que el panel ya
+    // muestra. `--append-system-prompt` suma al suyo en vez de reemplazarlo.
+    "--append-system-prompt", SYSTEM_PROMPT,
   ]
   if (opts.model) args.push("--model", opts.model)
   if (opts.allowedTools) {

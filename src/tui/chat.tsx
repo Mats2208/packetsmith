@@ -2,6 +2,7 @@
 // y arma los turnos es app.tsx.
 import { For, Show } from "solid-js"
 import { C } from "./theme.ts"
+import { WORDMARK, CHAIN } from "./ascii.ts"
 
 export interface Turn {
   role: "user" | "agent"
@@ -168,6 +169,31 @@ export function Chat(props: {
 }) {
   return (
     <box style={{ flexDirection: "column", flexGrow: 1, border: true, borderColor: C.rule, paddingLeft: 1, paddingRight: 1 }}>
+      {/* El banner ocupa filas que el chat necesita, asi que vive solo hasta
+          el primer mensaje.
+
+          Cada bloque va en UN <text> con saltos y con ALTURA EXPLICITA en su
+          box. Dos razones, las dos descubiertas renderizando:
+          · varios <text> hermanos se dibujan sobre la misma fila (el wordmark
+            de 3 lineas colapsaba a 1);
+          · un <text> multilinea sin altura declarada deja que el siguiente le
+            pise las ultimas filas. */}
+      <Show when={!props.turns.length && !props.streaming}>
+        <box style={{ flexDirection: "column", marginTop: 2, marginLeft: 2 }}>
+          <box style={{ height: WORDMARK.length }}>
+            <text style={{ fg: C.fg }}>{WORDMARK.join("\n")}</text>
+          </box>
+          <box style={{ height: CHAIN.length, marginTop: 1 }}>
+            <text style={{ fg: C.rule }}>{CHAIN.join("\n")}</text>
+          </box>
+          <box style={{ height: 2, marginTop: 1 }}>
+            <text style={{ fg: C.rule }}>
+              {"describí una red en lenguaje natural.\nel panel de la derecha se dibuja solo."}
+            </text>
+          </box>
+        </box>
+      </Show>
+
       <scrollbox style={{ flexGrow: 1 }}>
         <For each={props.turns}>
           {(turn) => (

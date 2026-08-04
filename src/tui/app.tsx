@@ -6,6 +6,7 @@ import { EMPTY, ingest } from "../topology/ingest.ts"
 import { Chat, shortToolName, type Turn } from "./chat.tsx"
 import { Canvas } from "./canvas.tsx"
 import { C } from "./theme.ts"
+import { SPIN } from "./ascii.ts"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
@@ -23,6 +24,9 @@ export function App(props: { engine: Engine; model?: string }) {
   // Enlace con Packet Tracer: se deduce de si la ultima pt_* respondio bien.
   // Es el unico dato binario que importa de un vistazo, y el unico verde.
   const [bridgeLive, setBridgeLive] = createSignal(false)
+  // Avanza con cada evento del stream: da un spinner sin timers ni intervalos,
+  // y de paso late al ritmo REAL del agente en vez de a un ritmo inventado.
+  const [tick, setTick] = createSignal(0)
 
   let session: Session | undefined
   // Tools del turno en curso, como signal para que el panel las muestre
@@ -37,6 +41,7 @@ export function App(props: { engine: Engine; model?: string }) {
 
   async function consume(s: Session) {
     for await (const ev of s.events()) {
+      setTick((n) => n + 1)
       switch (ev.type) {
         case "ready":
           setModel(ev.model)
@@ -108,7 +113,7 @@ export function App(props: { engine: Engine; model?: string }) {
       <box style={{ flexDirection: "row", height: 1, paddingLeft: 1 }}>
         <text style={{ fg: C.fg }}>{"PACKETSMITH"}</text>
         <text style={{ fg: C.rule }}>
-          {`  ${props.engine.name.toUpperCase()} / ${model().toUpperCase()}  ///  ${toolCount()} TOOLS  ///  $${cost().toFixed(4)}`}
+          {`  ${props.engine.name.toUpperCase()} / ${model().toUpperCase()}  ///  ${toolCount()} TOOLS`}
         </text>
       </box>
 
@@ -125,6 +130,21 @@ export function App(props: { engine: Engine; model?: string }) {
           onInput={setDraft}
           onSubmit={submit}
         />
+      </box>
+
+      {/* Barra de estado: lo que cambia en vivo va acá abajo, lejos del texto,
+          para que el ojo no tenga que competir con la conversación. */}
+      <box style={{ flexDirection: "row", height: 1, paddingLeft: 1 }}>
+        <text style={{ fg: busy() ? C.fg : C.rule }}>
+          {busy() ? `${SPIN[tick() % SPIN.length]} ` : "· "}
+        </text>
+        <text style={{ fg: C.rule }}>
+          {`${turns().length} TURNS  ///  ${topology().devices.length} NODES  ///  `}
+        </text>
+        <text style={{ fg: bridgeLive() ? C.live : C.rule }}>
+          {bridgeLive() ? "PT LINKED" : "PT OFFLINE"}
+        </text>
+        <text style={{ fg: C.rule }}>{`  ///  $${cost().toFixed(4)}`}</text>
       </box>
     </box>
   )

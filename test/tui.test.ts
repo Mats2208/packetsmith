@@ -167,3 +167,24 @@ describe("markdown selectivo", () => {
     expect(frame).not.toContain("`")
   })
 })
+
+describe("pantalla de bienvenida", () => {
+  test("el wordmark se dibuja completo, no colapsado", async () => {
+    // Gotcha de OpenTUI: varios <text> hermanos se pintan sobre la MISMA fila,
+    // y un <text> multilínea sin altura declarada deja que el siguiente le pise
+    // las últimas. El wordmark de 3 filas llegó a verse como 1.
+    const frame = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 18)
+    const rows = frame.split("\n").filter((r) => r.includes("█"))
+    expect(rows.length).toBeGreaterThanOrEqual(3)
+  })
+
+  test("muestra la cadena y desaparece al primer mensaje", async () => {
+    const empty = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 18)
+    expect(empty).toContain("packet tracer")
+
+    // Un banner permanente robaría las filas que el chat necesita.
+    const used = await frameOf(
+      () => Chat({ turns: [{ role: "user", text: "hola" }], streaming: "", busy: false }), 60, 18)
+    expect(used).not.toContain("packet tracer")
+  })
+})
