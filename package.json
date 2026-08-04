@@ -1,6 +1,6 @@
 {
   "name": "packetsmith",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Terminal agent for Cisco Packet Tracer. Describe a network in plain language and watch the topology build itself.",
   "license": "MIT",
   "author": "Mats2208",
@@ -13,6 +13,7 @@
     "dev": "bun run src/index.tsx",
     "preview": "bun run scripts/preview.tsx",
     "bench": "bun run scripts/bench.tsx",
+    "shots": "bun run scripts/shots.tsx",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

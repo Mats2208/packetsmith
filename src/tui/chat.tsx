@@ -456,7 +456,15 @@ export function Chat(props: {
       </Show>
 
       <Show when={!vacio()}>
-        <scrollbox style={{ flexGrow: 1 }}>
+        {/* La barra de scroll se pinta siempre, haga falta o no, y sin teñirla
+            queda una columna de bloques encendidos partiendo la conversación al
+            medio. Con el fondo y el filete del tema se vuelve un riel. */}
+        <scrollbox
+          style={{ flexGrow: 1 }}
+          verticalScrollbarOptions={{
+            trackOptions: { backgroundColor: C.bg, foregroundColor: C.rule },
+          }}
+        >
           <For each={props.turns}>
             {(turn) => (
               <Block role={turn.role}>
