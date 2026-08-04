@@ -6,10 +6,14 @@ import { EMPTY, ingest } from "../topology/ingest.ts"
 import { Chat, shortToolName, type Turn } from "./chat.tsx"
 import { Canvas } from "./canvas.tsx"
 import { C } from "./theme.ts"
-import { SPIN } from "./ascii.ts"
+import { sweep } from "./ascii.ts"
+import { Hairline, Hud } from "./frame.tsx"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
+
+/** Va en la placa de la cabecera. Se sube a mano con cada release. */
+const REV = "0.2"
 
 export function App(props: { engine: Engine; model?: string }) {
   const [turns, setTurns] = createSignal<Turn[]>([])
@@ -69,7 +73,7 @@ export function App(props: { engine: Engine; model?: string }) {
             // "no esta conectado" llega como resultado OK, no como error:
             // hay que mirar el texto para saber si el bridge esta vivo.
             const txt = typeof ev.output === "string" ? ev.output : JSON.stringify(ev.output ?? "")
-            setBridgeLive(!ev.isError && !/no est\u00e1 conectado|not connected/i.test(txt))
+            setBridgeLive(!ev.isError && !/no está conectado|not connected/i.test(txt))
             if (!ev.isError) setTopology((cur) => ingest(cur, ev.name, ev.output))
           }
           break
@@ -109,42 +113,66 @@ export function App(props: { engine: Engine; model?: string }) {
   }
 
   return (
-    <box style={{ flexDirection: "column", flexGrow: 1 }}>
-      <box style={{ flexDirection: "row", height: 1, paddingLeft: 1 }}>
-        <text style={{ fg: C.fg }}>{"PACKETSMITH"}</text>
-        <text style={{ fg: C.rule }}>
-          {`  ${props.engine.name.toUpperCase()} / ${model().toUpperCase()}  ///  ${toolCount()} TOOLS`}
-        </text>
+    // El fondo se declara acá y no en la terminal: sin esto el tema del usuario
+    // se filtra por debajo y la paleta "casi-negro" que define el arquetipo no
+    // llega a existir. En Warp con un tema azulado la app entera se veía turquesa.
+    <box style={{ flexDirection: "column", flexGrow: 1, backgroundColor: C.bg }}>
+      {/* Cabecera: identidad y capacidades. La placa `REV` de la derecha es de
+          manual industrial, no adorno — dice qué versión estás mirando.
+          El estado del enlace NO va acá: vive al pie del panel de topología,
+          que es de lo que habla. Dos indicadores del mismo dato compiten. */}
+      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+        <Hud
+          segments={[
+            { text: "PACKETSMITH", fg: C.fg },
+            { text: props.engine.name.toUpperCase() },
+            // El motor ya dijo "CLAUDE"; repetirlo en el modelo daba
+            // "CLAUDE ▏ CLAUDE-OPUS-5", que ocupa el doble y no dice más.
+            { text: model().toUpperCase().replace(/^CLAUDE-/, "") },
+            { text: `${toolCount()} TOOLS` },
+          ]}
+          tail={{ text: `REV ${REV}` }}
+        />
       </box>
+      <Hairline />
 
+      {/* Las dos zonas no llevan marco propio: las separa una canaleta y un
+          fondo apenas distinto. Dos rectángulos anidados leían como formulario,
+          no como consola. */}
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
         <Chat turns={turns()} streaming={streaming()} busy={busy()} liveTools={live()} />
         <Canvas topology={topology()} lastTool={lastTool()} live={bridgeLive()} />
       </box>
 
-      <box style={{ border: true, borderColor: C.rule, height: 3 }}>
+      <Hairline />
+      {/* La cuña `▌` marca dónde escribís, y se enciende solo cuando el turno es
+          tuyo: mientras el agente trabaja no hay nada que escribir. */}
+      <box style={{ flexDirection: "row", height: 1, paddingLeft: 1, paddingRight: 1 }}>
+        <text style={{ fg: busy() ? C.rule : C.fg, flexShrink: 0 }}>{"▌ "}</text>
         <input
           focused
           value={draft()}
-          placeholder={busy() ? "/// working" : ">>> describí la red"}
+          placeholder={busy() ? "el agente está trabajando…" : "describí la red que querés"}
           onInput={setDraft}
           onSubmit={submit}
         />
       </box>
 
       {/* Barra de estado: lo que cambia en vivo va acá abajo, lejos del texto,
-          para que el ojo no tenga que competir con la conversación. */}
-      <box style={{ flexDirection: "row", height: 1, paddingLeft: 1 }}>
-        <text style={{ fg: busy() ? C.fg : C.rule }}>
-          {busy() ? `${SPIN[tick() % SPIN.length]} ` : "· "}
-        </text>
-        <text style={{ fg: C.rule }}>
-          {`${turns().length} TURNS  ///  ${topology().devices.length} NODES  ///  `}
-        </text>
-        <text style={{ fg: bridgeLive() ? C.live : C.rule }}>
-          {bridgeLive() ? "PT LINKED" : "PT OFFLINE"}
-        </text>
-        <text style={{ fg: C.rule }}>{`  ///  $${cost().toFixed(4)}`}</text>
+          para que el ojo no tenga que competir con la conversación. El barrido
+          de la derecha reemplaza al spinner — ocupa el ancho del aparato en vez
+          de un carácter, que es la diferencia entre "algo pasa" y telemetría. */}
+      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+        <Hud
+          segments={[
+            { text: `${turns().length} TURNS` },
+            { text: `${topology().devices.length} NODES` },
+            { text: `${topology().links.length} LINKS` },
+            { text: `$${cost().toFixed(4)}` },
+          ]}
+          tail={busy() ? { text: sweep(14, tick()), fg: C.fg } : { text: "IDLE", fg: C.rule }}
+          phase={37}
+        />
       </box>
     </box>
   )

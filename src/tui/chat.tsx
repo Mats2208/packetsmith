@@ -2,7 +2,8 @@
 // y arma los turnos es app.tsx.
 import { For, Show } from "solid-js"
 import { C } from "./theme.ts"
-import { WORDMARK, CHAIN } from "./ascii.ts"
+import { CHAIN, wordmark } from "./ascii.ts"
+import { Art, GUTTER, Plate } from "./frame.tsx"
 
 export interface Turn {
   role: "user" | "agent"
@@ -109,20 +110,33 @@ export function summarizeTools(tools: NonNullable<Turn["tools"]>): {
   }
 }
 
+/**
+ * Las tools del turno, como escalera.
+ *
+ * Una lista separada por comas se lee como prosa y se confunde con la respuesta;
+ * los conectores `├ └` la marcan como maquinaria. El orden no es el de llamada
+ * sino el de urgencia —corriendo, falladas, hechas— porque lo que importa
+ * mientras se mira es qué está pasando y qué se rompió, no la cronología.
+ */
 function Tools(props: { tools: NonNullable<Turn["tools"]> }) {
-  const s = () => summarizeTools(props.tools)
+  const rungs = () => {
+    const s = summarizeTools(props.tools)
+    return [
+      ...s.running.map((name) => ({ name, mark: "▓", fg: C.fg })),
+      ...s.failed.map((name) => ({ name, mark: "✗", fg: C.alert })),
+      ...s.ok.map((name) => ({ name, mark: "·", fg: C.dim })),
+    ]
+  }
+
   return (
-    <>
-      <Show when={s().running.length}>
-        <text style={{ fg: C.fg }}>{`    ${s().running.join(", ")} …`}</text>
-      </Show>
-      <Show when={s().failed.length}>
-        <text style={{ fg: C.alert }}>{`    ✗ ${s().failed.join(", ")}`}</text>
-      </Show>
-      <Show when={s().ok.length}>
-        <text style={{ fg: C.dim }}>{`    ${s().ok.join(" · ")}`}</text>
-      </Show>
-    </>
+    <For each={rungs()}>
+      {(r, i) => (
+        <text style={{ fg: C.rule }}>
+          {i() === rungs().length - 1 ? "└ " : "├ "}
+          <span style={{ fg: r.fg }}>{`${r.mark} ${r.name}`}</span>
+        </text>
+      )}
+    </For>
   )
 }
 
@@ -160,6 +174,33 @@ function Body(props: { text: string }) {
   )
 }
 
+/**
+ * Un bloque de mensaje con su canaleta.
+ *
+ * La canaleta —una barra `▌` que corre por todo el alto del bloque— reemplaza
+ * al par de etiquetas sueltas: dice de quién es el mensaje en cada línea, no
+ * solo en la primera, que es justo lo que hacía falta cuando una respuesta pasa
+ * de una pantalla y el encabezado ya se fue para arriba.
+ */
+function Block(props: { role: Turn["role"]; children: any }) {
+  const mine = () => props.role === "user"
+  return (
+    <box
+      style={{
+        flexDirection: "column",
+        marginBottom: 1,
+        paddingLeft: 1,
+        border: ["left"],
+        customBorderChars: GUTTER,
+        borderColor: mine() ? C.fg : C.rule,
+      }}
+    >
+      <text style={{ fg: mine() ? C.operator : C.dim }}>{mine() ? "VOS" : "AGENTE"}</text>
+      {props.children}
+    </box>
+  )
+}
+
 export function Chat(props: {
   turns: Turn[]
   streaming: string
@@ -168,28 +209,15 @@ export function Chat(props: {
   liveTools?: NonNullable<Turn["tools"]>
 }) {
   return (
-    <box style={{ flexDirection: "column", flexGrow: 1, border: true, borderColor: C.rule, paddingLeft: 1, paddingRight: 1 }}>
-      {/* El banner ocupa filas que el chat necesita, asi que vive solo hasta
-          el primer mensaje.
-
-          Cada bloque va en UN <text> con saltos y con ALTURA EXPLICITA en su
-          box. Dos razones, las dos descubiertas renderizando:
-          · varios <text> hermanos se dibujan sobre la misma fila (el wordmark
-            de 3 lineas colapsaba a 1);
-          · un <text> multilinea sin altura declarada deja que el siguiente le
-            pise las ultimas filas. */}
+    <box style={{ flexDirection: "column", flexGrow: 1, paddingLeft: 1, paddingRight: 1 }}>
+      {/* El banner ocupa filas que el chat necesita, así que vive solo hasta el
+          primer mensaje. */}
       <Show when={!props.turns.length && !props.streaming}>
         <box style={{ flexDirection: "column", marginTop: 2, marginLeft: 2 }}>
-          <box style={{ height: WORDMARK.length }}>
-            <text style={{ fg: C.fg }}>{WORDMARK.join("\n")}</text>
-          </box>
-          <box style={{ height: CHAIN.length, marginTop: 1 }}>
-            <text style={{ fg: C.rule }}>{CHAIN.join("\n")}</text>
-          </box>
-          <box style={{ height: 2, marginTop: 1 }}>
-            <text style={{ fg: C.rule }}>
-              {"describí una red en lenguaje natural.\nel panel de la derecha se dibuja solo."}
-            </text>
+          <Art rows={wordmark()} />
+          <Plate lines={CHAIN} marginTop={1} />
+          <box style={{ height: 1, marginTop: 1 }}>
+            <text style={{ fg: C.dim }}>{"describí una red en lenguaje natural."}</text>
           </box>
         </box>
       </Show>
@@ -197,44 +225,32 @@ export function Chat(props: {
       <scrollbox style={{ flexGrow: 1 }}>
         <For each={props.turns}>
           {(turn) => (
-            <box style={{ flexDirection: "column", marginBottom: 1 }}>
-              {/* Etiqueta de rol explícita: con solo un color y un símbolo no
-                  se distingue de un vistazo quién dijo qué. */}
-              {/* Framing direccional: el chevron dice de qué lado viene el
-                  mensaje sin gastar color ni una línea extra. */}
-              <text style={{ fg: turn.role === "user" ? C.operator : C.dim }}>
-                {turn.role === "user" ? ">>> VOS" : "<<< AGENTE"}
-              </text>
+            <Block role={turn.role}>
               {/* Las tools van ANTES del texto: son lo que el agente hizo para
                   poder responder, y dejarlas después empujaba la respuesta
                   fuera de pantalla en cualquier deploy real. */}
               <Show when={turn.tools?.length}>
                 <Tools tools={turn.tools!} />
               </Show>
-              <Show when={turn.role === "agent"} fallback={<text>{`  ${turn.text}`}</text>}>
+              <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>
                 <Body text={turn.text} />
               </Show>
-            </box>
+            </Block>
           )}
         </For>
 
         {/* El turno en curso se pinta aparte: todavía no está cerrado. */}
         <Show when={props.streaming || props.liveTools?.length}>
-          <box style={{ flexDirection: "column" }}>
-            <text style={{ fg: C.dim }}>{"<<< AGENTE"}</text>
+          <Block role="agent">
             <Show when={props.liveTools?.length}>
               <Tools tools={props.liveTools!} />
             </Show>
             <Show when={props.streaming}>
               <text>{props.streaming}</text>
             </Show>
-          </box>
+          </Block>
         </Show>
       </scrollbox>
-
-      <Show when={props.busy}>
-        <text style={{ fg: C.rule }}>{"/// working"}</text>
-      </Show>
     </box>
   )
 }

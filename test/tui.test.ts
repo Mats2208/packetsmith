@@ -34,11 +34,20 @@ describe("Chat", () => {
     ]
     const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
 
-    // Framing direccional: el chevron dice de qué lado viene el mensaje.
-    expect(frame).toContain(">>> VOS")
-    expect(frame).toContain("<<< AGENTE")
+    expect(frame).toContain("VOS")
+    expect(frame).toContain("AGENTE")
     expect(frame).toContain("crea 3 routers")
     expect(frame).toContain("listo")
+  })
+
+  test("cada mensaje lleva su canaleta a lo largo de todo el bloque", async () => {
+    // La canaleta es lo que dice de quién es el mensaje cuando la respuesta
+    // pasa de una pantalla y el encabezado ya se fue para arriba.
+    const turns: Turn[] = [{ role: "agent", text: "linea uno\nlinea dos\nlinea tres" }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
+
+    const marked = frame.split("\n").filter((l) => l.includes("▌"))
+    expect(marked.length).toBeGreaterThanOrEqual(4)
   })
 
   test("los bloques de código se despegan de la prosa", async () => {
@@ -58,10 +67,9 @@ describe("Chat", () => {
     // mirando una pantalla quieta hasta que el agente termina.
     const frame = await frameOf(() => Chat({ turns: [], streaming: "escribiendo…", busy: true }))
     expect(frame).toContain("escribiendo…")
-    expect(frame).toContain("/// working")
   })
 
-  test("marca las tools según su estado", async () => {
+  test("marca las tools según su estado, como escalera", async () => {
     const turns: Turn[] = [{
       role: "agent",
       text: "hecho",
@@ -77,7 +85,13 @@ describe("Chat", () => {
     // bien va apagado, porque no hay nada que decidir con eso.
     expect(frame).toContain("✗ pt_add_device")
     expect(frame).toContain("pt_full_build")
-    expect(frame).toContain("pt_screenshot")
+    // Lo que sigue corriendo va primero: es lo único sobre lo que se puede
+    // esperar algo. Los conectores marcan el bloque como maquinaria, no prosa.
+    const rows = frame.split("\n")
+    expect(rows.findIndex((l) => l.includes("pt_screenshot")))
+      .toBeLessThan(rows.findIndex((l) => l.includes("pt_full_build")))
+    expect(frame).toContain("├ ")
+    expect(frame).toContain("└ ")
   })
 })
 
@@ -100,10 +114,32 @@ describe("Canvas", () => {
     ],
   }
 
-  test("dice que no hay datos en vez de quedar mudo", async () => {
-    const frame = await frameOf(() => Canvas({ topology: EMPTY }))
+  test("el panel vacío dibuja el esquema de lo que va a aparecer", async () => {
+    // Un panel en blanco con la palabra "esperando" no dice qué se espera.
+    const frame = await frameOf(() => Canvas({ topology: EMPTY }), 44, 20)
     expect(frame).toContain("[ TOPOLOGY ]")
     expect(frame).toContain("awaiting deployment")
+    expect(frame).toContain("┌─────┐")
+    // El esquema tiene que llegar entero hasta los hosts, no cortarse arriba.
+    expect(frame).toContain("▪   ▪")
+  })
+
+  test("censa la red por familia antes del árbol", async () => {
+    // Responde de un vistazo de qué está hecha la topología, sin obligar a
+    // contar filas en el árbol de abajo.
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 44, 20)
+    expect(frame).toContain("ROUTERS")
+    expect(frame).toContain("SWITCHES")
+    expect(frame).toContain("HOSTS")
+    expect(frame).toContain("█")
+  })
+
+  test("recorta la cola en vez de dejar que empuje el renglón", async () => {
+    // Un nombre de tool largo hacía saltar la línea entera y rompía la grilla.
+    const frame = await frameOf(
+      () => Canvas({ topology: TOPO, lastTool: "pt_install_modules_batch_larguísimo" }), 44, 20)
+    const row = frame.split("\n").find((l) => l.includes("NODES"))!
+    expect(row).toContain("…")
   })
 
   test("dibuja la jerarquía router → switch → host", async () => {
@@ -123,8 +159,17 @@ describe("Canvas", () => {
     // Único uso del verde en toda la interfaz: si todo resalta, nada resalta.
     const off = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
     const on = await frameOf(() => Canvas({ topology: TOPO, live: true }), 46, 14)
-    expect(off).toContain("○")
-    expect(on).toContain("●")
+    expect(off).toContain("○ BRIDGE DOWN")
+    expect(on).toContain("● BRIDGE UP")
+  })
+
+  test("el estado vive ARRIBA del scrollbox, no debajo", async () => {
+    // En esta versión de OpenTUI el scrollbox se queda con todo el alto que
+    // sobra: cualquier pie que se ponga después nunca llega a dibujarse.
+    const frame = await frameOf(() => Canvas({ topology: TOPO, live: true }), 46, 14)
+    const rows = frame.split("\n")
+    expect(rows.findIndex((l) => l.includes("BRIDGE UP")))
+      .toBeLessThan(rows.findIndex((l) => l.includes("R1")))
   })
 
   test("muestra las IPs junto a cada equipo", async () => {
@@ -134,7 +179,7 @@ describe("Canvas", () => {
 
   test("resume el tamaño de la red en el encabezado", async () => {
     const frame = await frameOf(() => Canvas({ topology: TOPO, lastTool: "pt_full_build" }), 46, 14)
-    expect(frame).toContain("3 NODES / 2 LINKS")
+    expect(frame).toContain("3 NODES · 2 LINKS")
   })
 })
 
@@ -173,18 +218,30 @@ describe("pantalla de bienvenida", () => {
     // Gotcha de OpenTUI: varios <text> hermanos se pintan sobre la MISMA fila,
     // y un <text> multilínea sin altura declarada deja que el siguiente le pise
     // las últimas. El wordmark de 3 filas llegó a verse como 1.
-    const frame = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 18)
+    const frame = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 22)
     const rows = frame.split("\n").filter((r) => r.includes("█"))
     expect(rows.length).toBeGreaterThanOrEqual(3)
   })
 
-  test("muestra la cadena y desaparece al primer mensaje", async () => {
-    const empty = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 18)
-    expect(empty).toContain("packet tracer")
+  test("el reflejo no se come la primera fila de la cadena", async () => {
+    // Una caja sin alto declarado mide una fila de menos y el bloque siguiente
+    // le pisa la última: el reflejo terminaba dibujado sobre el diagrama.
+    const frame = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 22)
+    const rows = frame.split("\n")
+    const top = rows.find((r) => r.includes("┌───────┐"))!
+    expect(top).not.toContain("▀")
+  })
+
+  test("muestra la cadena entera, ida y vuelta", async () => {
+    const empty = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 22)
+    expect(empty).toContain("PACKET TRACER")
+    // El lazo de retorno es la mitad que no se explica sola: el panel deriva de
+    // lo que PT devuelve, no lo dibuja PacketSmith de memoria.
+    expect(empty).toContain("TOPOLOGÍA")
 
     // Un banner permanente robaría las filas que el chat necesita.
     const used = await frameOf(
-      () => Chat({ turns: [{ role: "user", text: "hola" }], streaming: "", busy: false }), 60, 18)
-    expect(used).not.toContain("packet tracer")
+      () => Chat({ turns: [{ role: "user", text: "hola" }], streaming: "", busy: false }), 60, 22)
+    expect(used).not.toContain("PACKET TRACER")
   })
 })
