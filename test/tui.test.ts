@@ -3,7 +3,7 @@
 // ve realmente en pantalla en vez de suponerlo.
 import { expect, test, describe } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { Chat, shortToolName, type Turn } from "../src/tui/chat.tsx"
+import { Chat, columnWidths, shortToolName, type Turn } from "../src/tui/chat.tsx"
 import { Canvas, guide } from "../src/tui/canvas.tsx"
 import { bridgeIsUp } from "../src/tui/app.tsx"
 import type { Topology } from "../src/topology/model.ts"
@@ -225,6 +225,56 @@ describe("Canvas", () => {
   })
 })
 
+describe("medidores", () => {
+  test("lo lleno y lo vacío se dibujan en colores distintos", async () => {
+    // El defecto: la barra entera iba en un solo tono, y sobre el fondo
+    // casi-negro `█` y `░` quedaban indistinguibles. El medidor dibujaba una
+    // mancha del mismo largo pasara lo que pasara — o sea, no medía nada.
+    const topology: Topology = {
+      devices: [
+        { name: "R1", model: "2911", x: 0, y: 0, ports: [] },
+        { name: "PC1", model: "PC-PT", x: 0, y: 0, ports: [] },
+        { name: "PC2", model: "PC-PT", x: 0, y: 0, ports: [] },
+        { name: "PC3", model: "PC-PT", x: 0, y: 0, ports: [] },
+      ],
+      links: [],
+    }
+    const setup = await testRender(() => Canvas({ topology }), { width: 46, height: 12 })
+    await setup.renderOnce()
+
+    const fila = setup.captureSpans().lines
+      .find((l) => l.spans.some((s) => s.text.includes("ROUTERS")))!
+    const lleno = fila.spans.find((s) => s.text.includes("█"))!
+    const vacio = fila.spans.find((s) => s.text.includes("░"))!
+
+    expect(lleno).toBeDefined()
+    expect(vacio).toBeDefined()
+    expect(`${lleno.fg}`).not.toBe(`${vacio.fg}`)
+  })
+})
+
+describe("columnas de tabla", () => {
+  test("cada columna mide lo que mide su contenido", () => {
+    expect(columnWidths([["Prueba", "OK"], ["PC-NORTE-ADM → 10.1.10.10", "4/4"]], 80))
+      .toEqual([25, 3])
+  })
+
+  test("cuando no entra, se recorta SOLO la columna más ancha", () => {
+    // Repartir el recorte entre todas mutila las cortas, que suelen ser justo
+    // las que traen el dato duro: `4/4`, `OK`, una IP.
+    const w = columnWidths([["camino larguísimo que no entra ni a palos", "4/4"]], 30)
+    expect(w[1]).toBe(3)
+    expect(w[0]! + w[1]! + 2).toBeLessThanOrEqual(30)
+  })
+
+  test("nunca deja una columna ilegible", () => {
+    // Con un ancho imposible se desborda antes que dejar columnas de un
+    // carácter: un dato cortado a "P" no es un dato.
+    const w = columnWidths([["aaaaaaaaaaaa", "bbbbbbbbbbbb", "cccccccccccc"]], 10)
+    for (const n of w) expect(n).toBeGreaterThanOrEqual(6)
+  })
+})
+
 describe("guías del árbol", () => {
   // Sin las verticales, un host de tercer nivel no dice de qué switch cuelga:
   // hay que contar espacios. `ancestors[i]` dice si ese ancestro todavía tiene
@@ -263,6 +313,20 @@ describe("markdown selectivo", () => {
     expect(frame).toContain("Prueba")
     expect(frame).toContain("4/4")
     expect(frame).not.toContain("|---|")
+  })
+
+  test("la tabla no corta el contenido cuando hay lugar", async () => {
+    // Con celdas de ancho fijo, una verificación real salía como
+    // "PC-NORTE-ADM → 10.1." — peor que no tener tabla, porque parece un dato.
+    const turns: Turn[] = [{
+      role: "agent",
+      text: "| Prueba | Camino | Resultado |\n|---|---|---|\n" +
+        "| PC-NORTE-ADM → 10.1.10.10 | access V10 → troncal | 4/4 |",
+    }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }), 90, 12)
+    expect(frame).toContain("PC-NORTE-ADM → 10.1.10.10")
+    expect(frame).toContain("access V10 → troncal")
+    expect(frame).toContain("4/4")
   })
 
   test("dos párrafos no quedan pegados", async () => {

@@ -10,8 +10,7 @@ import { Canvas, WIDTH as PANEL_WIDTH } from "./canvas.tsx"
 import { Prompt } from "./prompt.tsx"
 import { Activity } from "./activity.tsx"
 import { C } from "./theme.ts"
-import { bar } from "./ascii.ts"
-import { Hairline, Hud } from "./frame.tsx"
+import { Gauge, Hairline, Hud } from "./frame.tsx"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
@@ -396,7 +395,7 @@ function Budget(props: { usage?: Usage; limits?: Limits; quota?: Quota; now: num
       <Show when={props.usage}>
         <text style={{ fg: C.rule }}>
           {"CTX "}
-          {bar(ctx(), 8)}
+          <Gauge fraction={ctx()} />
           <span style={{ fg: C.dim }}>{` ${Math.round(ctx() * 100)}%`}</span>
         </text>
       </Show>
@@ -413,7 +412,12 @@ function Budget(props: { usage?: Usage; limits?: Limits; quota?: Quota; now: num
       >
         <text style={{ fg: C.rule }}>
           {`   ${win()} `}
-          {bar(props.quota!.session! / 100, 8)}
+          {/* La parte llena toma el color del estado: cerca del tope la barra
+              se enciende sola y no hay que leer el número para saberlo. */}
+          <Gauge
+            fraction={props.quota!.session! / 100}
+            fg={pctColor(props.quota!.session!)}
+          />
           <span style={{ fg: pctColor(props.quota!.session!) }}>
             {` ${Math.round(props.quota!.session!)}%`}
           </span>

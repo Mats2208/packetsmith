@@ -21,6 +21,15 @@ export const C = {
   dim: "#6B6B6B",
   /** Estructura: bordes, separadores, reglas. */
   rule: "#2A2A2A",
+  /**
+   * Cables del plano y parte llena de los medidores.
+   *
+   * NO es `rule`. Un filete puede permitirse ser casi invisible porque su
+   * trabajo es separar; un cable y una barra son DATO, y dibujados en `rule`
+   * sobre el fondo casi-negro directamente no se ven: los medidores parecían
+   * una mancha y el plano, nodos flotando sin conexión.
+   */
+  wire: "#4E4E4E",
   /** Acento único. Errores y solo errores. */
   alert: "#E61919",
   /** Ámbar de aviso. UN solo uso: la cuota cerca del tope. Es el único estado

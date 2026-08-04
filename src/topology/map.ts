@@ -125,7 +125,10 @@ export function drawMap(topo: Topology, opts: MapOpts): Span[][] {
     const steps = Math.max(Math.abs(b.c - a.c), Math.abs(b.r - a.r))
     if (!steps) continue
     const ch = strokeFor(b.c - a.c, b.r - a.r)
-    // Se saltean los extremos: ahí van los nodos.
+
+    // Un paso por celda, y los extremos se saltean porque ahí van los nodos.
+    // `steps` es el máximo de las dos distancias, así que la línea ya sale
+    // continua: se probó recorrer en medios pasos y solo engrosó los trazos.
     for (let i = 1; i < steps; i++) {
       put(
         Math.round(a.c + ((b.c - a.c) * i) / steps),

@@ -22,10 +22,17 @@ export interface Turn {
   map?: Topology
 }
 
-/** Tono de cada tipo de celda del plano. */
+/**
+ * Tono de cada tipo de celda del plano.
+ *
+ * Los cables van en `wire` y no en `rule`: un filete puede permitirse ser casi
+ * invisible porque su trabajo es separar, pero un cable es DATO. Dibujados en
+ * `rule` sobre el fondo casi-negro el plano se veía como nodos flotando sin
+ * ninguna conexión entre ellos.
+ */
 const INK: Record<Ink, string> = {
   node: C.fg,
-  link: C.rule,
+  link: C.wire,
   label: C.dim,
 }
 
@@ -82,6 +89,16 @@ export type Piece =
   | { kind: "text"; text: string }
   /** Renglón en blanco entre párrafos. */
   | { kind: "gap" }
+  /**
+   * Tabla entera, no fila por fila.
+   *
+   * Las columnas solo se pueden dimensionar viendo TODAS las filas juntas. Con
+   * un ancho fijo por celda —lo que había— una verificación real quedaba
+   * cortada a la mitad: "PC-NORTE-ADM → 10.1.10.10" salía como
+   * "PC-NORTE-ADM → 10.1.", que es peor que no tener tabla porque parece un
+   * dato y no lo es.
+   */
+  | { kind: "table"; rows: string[][] }
 
 const FENCE = /```[^\n]*\n([\s\S]*?)```/g
 
@@ -146,7 +163,86 @@ export function parseBlocks(text: string): Piece[] {
 
   // Un hueco al final solo empuja el bloque siguiente sin separar nada.
   if (out[out.length - 1]?.kind === "gap") out.pop()
+  return groupTables(out)
+}
+
+/**
+ * Junta filas consecutivas en una tabla.
+ *
+ * El parser las emite de a una porque las lee de a una, pero dibujarlas de a
+ * una obliga a un ancho de columna fijo, y ahí es donde se cortaban los datos.
+ * El separador `|---|` desaparece: en un panel de terminal no separa nada que
+ * la alineación no separe ya.
+ */
+function groupTables(pieces: Piece[]): Piece[] {
+  const out: Piece[] = []
+  let rows: string[][] | undefined
+
+  const close = () => {
+    if (rows) out.push({ kind: "table", rows })
+    rows = undefined
+  }
+
+  for (const p of pieces) {
+    if (p.kind === "row") {
+      ;(rows ??= []).push(p.cells)
+      continue
+    }
+    // La regla vive DENTRO de la tabla, así que no la corta.
+    if (p.kind === "rule" && rows) continue
+    close()
+    out.push(p)
+  }
+  close()
   return out
+}
+
+/**
+ * Ancho de cada columna: el del contenido más largo.
+ *
+ * Si la suma no entra en el ancho disponible, se recorta la columna más ancha
+ * —y solo esa— hasta que entre. Repartir el recorte entre todas mutila las
+ * columnas cortas, que suelen ser justo las que traen el dato duro (`4/4`,
+ * `OK`, una IP).
+ */
+export function columnWidths(rows: string[][], available: number): number[] {
+  const cols = Math.max(...rows.map((r) => r.length))
+  const widths = Array.from({ length: cols }, (_, i) =>
+    Math.max(...rows.map((r) => (r[i] ?? "").length)))
+
+  const GAP = 2
+  let total = () => widths.reduce((a, b) => a + b, 0) + GAP * (cols - 1)
+  while (total() > available) {
+    const widest = widths.indexOf(Math.max(...widths))
+    if (widths[widest]! <= 6) break
+    widths[widest]!--
+  }
+  return widths
+}
+
+/**
+ * Una tabla, con las columnas dimensionadas por su contenido.
+ *
+ * La primera fila es el encabezado y se dibuja encendida con un filete debajo:
+ * en una respuesta larga, una tabla sin cabeza marcada se confunde con prosa
+ * tabulada.
+ */
+function Table(props: { rows: string[][]; width?: number }) {
+  const widths = () => columnWidths(props.rows, (props.width ?? 76) - 2)
+  const line = (cells: string[]) =>
+    "  " + cells.map((c, i) => c.padEnd(widths()[i] ?? 0).slice(0, widths()[i] ?? 0)).join("  ")
+
+  return (
+    <>
+      <text style={{ fg: C.fg }}>{line(props.rows[0] ?? [])}</text>
+      <text style={{ fg: C.rule }}>
+        {"  " + "─".repeat(widths().reduce((a, b) => a + b, 0) + 2 * (widths().length - 1))}
+      </text>
+      <For each={props.rows.slice(1)}>
+        {(r) => <text style={{ fg: C.dim }}>{line(r)}</text>}
+      </For>
+    </>
+  )
 }
 
 /**
@@ -223,7 +319,7 @@ function Tools(props: { tools: NonNullable<Turn["tools"]> }) {
 
 /** Cada pieza con su tratamiento. La jerarquía la hace el color, no el tamaño:
  *  en un terminal todas las letras miden lo mismo. */
-function Body(props: { text: string }) {
+function Body(props: { text: string; width?: number }) {
   return (
     <For each={parseBlocks(props.text)}>
       {(p) => {
@@ -240,13 +336,10 @@ function Body(props: { text: string }) {
             return <text style={{ fg: C.fg }}>{`── ${p.text.toUpperCase()}`}</text>
           case "rule":
             return <text style={{ fg: C.rule }}>{"  " + "─".repeat(28)}</text>
+          case "table":
+            return <Table rows={p.rows} width={props.width} />
           case "row":
-            // Columnas de ancho fijo: una tabla desalineada es peor que ninguna.
-            return (
-              <text style={{ fg: C.dim }}>
-                {"  " + p.cells.map((c) => c.padEnd(20).slice(0, 20)).join(" ")}
-              </text>
-            )
+            return <text style={{ fg: C.dim }}>{"  " + p.cells.join("  ")}</text>
           case "bullet":
             return <text style={{ fg: C.dim }}>{`  · ${p.text}`}</text>
           default:
@@ -318,7 +411,7 @@ export function Chat(props: {
                   <Tools tools={turn.tools!} />
                 </Show>
                 <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>
-                  <Body text={turn.text} />
+                  <Body text={turn.text} width={props.mapWidth} />
                 </Show>
                 <Show when={turn.map}>
                   <MapBlock topology={turn.map!} width={props.mapWidth ?? 76} />

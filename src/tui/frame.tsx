@@ -141,6 +141,30 @@ export function Hud(props: {
   )
 }
 
+/**
+ * Barra de proporción, en dos tonos.
+ *
+ * Los dos tonos son el punto. Antes la barra entera iba en un solo color y
+ * `█` y `░` quedaban indistinguibles sobre el fondo casi-negro: el medidor
+ * dibujaba una mancha del mismo largo pasara lo que pasara. Una barra que no
+ * distingue lo lleno de lo vacío no es un medidor, es decoración.
+ *
+ * Va SIN envoltorio propio para poder ir adentro de un `<text>` junto a su
+ * etiqueta y su número, que es donde tiene sentido leerla.
+ */
+export function Gauge(props: { fraction: number; width?: number; fg?: string }) {
+  const width = () => props.width ?? 8
+  const filled = () =>
+    Math.max(0, Math.min(width(), Math.round((props.fraction || 0) * width())))
+
+  return (
+    <>
+      <span style={{ fg: props.fg ?? C.wire }}>{"█".repeat(filled())}</span>
+      <span style={{ fg: C.rule }}>{"░".repeat(width() - filled())}</span>
+    </>
+  )
+}
+
 /** Regla horizontal a lo ancho del contenedor. Una celda de alto, sin caja. */
 export function Hairline() {
   return (

@@ -11,8 +11,8 @@ import type { Device, Kind, Topology } from "../topology/model.ts"
 import { ICON, kindOf } from "../topology/model.ts"
 import { buildForest, addressesOf, censusOf, groupBySubnet, type Node } from "../topology/tree.ts"
 import { C, NODE, bracket } from "./theme.ts"
-import { bar, rule, SCHEMATIC } from "./ascii.ts"
-import { Plate, SPLIT } from "./frame.tsx"
+import { rule, SCHEMATIC } from "./ascii.ts"
+import { Gauge, Plate, SPLIT } from "./frame.tsx"
 
 /** Columna donde arranca la IP. Fija: es lo que mantiene la grilla a plomo. */
 const IP_COL = 22
@@ -60,7 +60,7 @@ function Census(props: { topology: Topology }) {
       {(t) => (
         <text style={{ fg: NODE[t.kind] ?? NODE.other }}>
           {`${ICON[t.kind]} ${CENSUS_LABEL[t.kind].padEnd(10)}`}
-          <span style={{ fg: C.rule }}>{bar(t.share, 12)}</span>
+          <Gauge fraction={t.share} width={12} />
           <span style={{ fg: C.dim }}>{String(t.count).padStart(4)}</span>
         </text>
       )}
