@@ -34,8 +34,9 @@ describe("Chat", () => {
     ]
     const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
 
-    expect(frame).toContain("VOS")
-    expect(frame).toContain("AGENTE")
+    // Framing direccional: el chevron dice de qué lado viene el mensaje.
+    expect(frame).toContain(">>> VOS")
+    expect(frame).toContain("<<< AGENTE")
     expect(frame).toContain("crea 3 routers")
     expect(frame).toContain("listo")
   })
@@ -57,7 +58,7 @@ describe("Chat", () => {
     // mirando una pantalla quieta hasta que el agente termina.
     const frame = await frameOf(() => Chat({ turns: [], streaming: "escribiendo…", busy: true }))
     expect(frame).toContain("escribiendo…")
-    expect(frame).toContain("pensando")
+    expect(frame).toContain("/// working")
   })
 
   test("marca las tools según su estado", async () => {
@@ -72,9 +73,11 @@ describe("Chat", () => {
     }]
     const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
 
-    expect(frame).toContain("✓ pt_full_build")
-    expect(frame).toContain("✗ pt_add_device")   // error, no se disfraza de éxito
-    expect(frame).toContain("● pt_screenshot")   // todavía corriendo
+    // El rojo es el único acento y se reserva para lo que falló; lo que salió
+    // bien va apagado, porque no hay nada que decidir con eso.
+    expect(frame).toContain("✗ pt_add_device")
+    expect(frame).toContain("pt_full_build")
+    expect(frame).toContain("pt_screenshot")
   })
 })
 
@@ -97,10 +100,10 @@ describe("Canvas", () => {
     ],
   }
 
-  test("invita a construir en vez de mostrar un panel mudo", async () => {
+  test("dice que no hay datos en vez de quedar mudo", async () => {
     const frame = await frameOf(() => Canvas({ topology: EMPTY }))
-    expect(frame).toContain("TOPOLOGÍA")
-    expect(frame).toContain("pedile al agente")
+    expect(frame).toContain("[ TOPOLOGY ]")
+    expect(frame).toContain("awaiting deployment")
   })
 
   test("dibuja la jerarquía router → switch → host", async () => {
@@ -116,14 +119,21 @@ describe("Canvas", () => {
     expect(rows[pc1]!.indexOf("PC1")).toBeGreaterThan(rows[r1]!.indexOf("R1"))
   })
 
+  test("el indicador de enlace distingue conectado de no conectado", async () => {
+    // Único uso del verde en toda la interfaz: si todo resalta, nada resalta.
+    const off = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
+    const on = await frameOf(() => Canvas({ topology: TOPO, live: true }), 46, 14)
+    expect(off).toContain("○")
+    expect(on).toContain("●")
+  })
+
   test("muestra las IPs junto a cada equipo", async () => {
     const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
     expect(frame).toContain("192.168.0.1")
   })
 
-  test("resume el tamaño de la red y la última tool", async () => {
+  test("resume el tamaño de la red en el encabezado", async () => {
     const frame = await frameOf(() => Canvas({ topology: TOPO, lastTool: "pt_full_build" }), 46, 14)
-    expect(frame).toContain("3 equipos")
-    expect(frame).toContain("pt_full_build")
+    expect(frame).toContain("3 NODES / 2 LINKS")
   })
 })

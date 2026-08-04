@@ -1,44 +1,34 @@
-// Panel derecho: la topología dibujada con Unicode.
+// Panel derecho: la topología, como telemetría.
 //
 // No se muestra la captura PNG de PT a propósito: el dibujo propio funciona en
-// cualquier terminal (Warp incluido), muestra estado que un bitmap no da (IPs,
-// enlaces) y se puede navegar.
+// cualquier terminal, muestra estado que un bitmap no da y se puede navegar.
 //
-// Tiene DOS modos según lo que haya llegado del agente:
+// Dos modos según lo que llegó del agente:
 //   con enlaces → árbol router → switch → host
 //   sin enlaces → agrupado por subred (pt_query_topology no trae enlaces)
 import { For, Show } from "solid-js"
 import type { Device, Topology } from "../topology/model.ts"
 import { ICON, kindOf } from "../topology/model.ts"
 import { buildForest, addressesOf, groupBySubnet, type Node } from "../topology/tree.ts"
+import { C, NODE, bracket } from "./theme.ts"
 
-const COLOR: Record<string, string> = {
-  router: "#7dcfff",
-  switch: "#7aa2f7",
-  wireless: "#bb9af7",
-  cloud: "#e0af68",
-  host: "#c0caf5",
-  other: "#565f89",
-}
-
-function label(d: Device): { icon: string; name: string; ips: string; color: string } {
-  const k = kindOf(d.model)
-  const ips = addressesOf(d)
-  return {
-    icon: ICON[k],
-    name: d.name,
-    ips: ips.length ? ips.join(" ") : "",
-    color: COLOR[k] ?? COLOR.other!,
-  }
-}
+/** Alinea el nombre para que la columna de IPs quede a plomo. */
+const PAD = 11
 
 function Row(props: { device: Device; prefix: string }) {
-  const l = () => label(props.device)
+  const kind = () => kindOf(props.device.model)
+  const ips = () => addressesOf(props.device)
+  const name = () => props.device.name.padEnd(PAD - props.prefix.length).slice(0, PAD)
+
   return (
-    <text style={{ fg: l().color }}>
-      {`${props.prefix}${l().icon} ${l().name}`}
-      <Show when={l().ips}>
-        <span style={{ fg: "#565f89" }}>{`  ${l().ips}`}</span>
+    <text style={{ fg: NODE[kind()] ?? NODE.other }}>
+      {`${props.prefix}${ICON[kind()]} ${name()}`}
+      <Show when={ips().length}>
+        <span style={{ fg: C.dim }}>{ips()[0]}</span>
+      </Show>
+      {/* Un router con varias IPs: la segunda se insinúa, no compite. */}
+      <Show when={ips().length > 1}>
+        <span style={{ fg: C.rule }}>{` +${ips().length - 1}`}</span>
       </Show>
     </text>
   )
@@ -59,55 +49,62 @@ function TreeNode(props: { node: Node; depth: number; last: boolean }) {
   )
 }
 
-export function Canvas(props: { topology: Topology; lastTool?: string }) {
+export function Canvas(props: { topology: Topology; lastTool?: string; live?: boolean }) {
   const count = () => props.topology.devices.length
-  const hasLinks = () => props.topology.links.length > 0
+  const links = () => props.topology.links.length
+  const forest = () => buildForest(props.topology)
 
   return (
-    <box style={{ flexDirection: "column", width: 46, border: true, padding: 1 }}>
-      {/* Todo el estado va en el encabezado: abajo el scrollbox se queda con
-          el alto que sobra y cualquier línea de pie termina fuera de vista.
-          Y dos <text> sueltos dentro de un Show se pisan en la misma fila. */}
-      <box style={{ flexDirection: "column", height: props.lastTool ? 2 : 1 }}>
-        <text style={{ fg: "#4fd6be" }}>
-          {`TOPOLOGÍA`}
-          <span style={{ fg: "#565f89" }}>
-            {count() ? `  ${count()} equipos · ${props.topology.links.length} enlaces` : ""}
-          </span>
+    <box style={{ flexDirection: "column", width: 40, border: true, borderColor: C.rule, paddingLeft: 1, paddingRight: 1 }}>
+      {/* Encabezado: todo el estado va acá. Abajo el scrollbox se queda con el
+          alto que sobra y cualquier línea de pie termina fuera de vista. */}
+      <box style={{ flexDirection: "column", height: 2 }}>
+        <text style={{ fg: C.fg }}>
+          {bracket("topology")}
+          {/* Único uso del verde: el enlace con PT, que es el dato binario
+              que importa de un vistazo. */}
+          <span style={{ fg: props.live ? C.live : C.rule }}>{props.live ? "  ●" : "  ○"}</span>
         </text>
-        <Show when={props.lastTool}>
-          <text style={{ fg: "#565f89" }}>{`▲ ${props.lastTool}`}</text>
-        </Show>
+        <text style={{ fg: C.dim }}>
+          {count() ? `${count()} NODES / ${links()} LINKS` : "NO DATA"}
+        </text>
       </box>
 
       <scrollbox style={{ flexGrow: 1 }}>
         <Show
           when={count()}
-          fallback={<text style={{ fg: "#565f89" }}>pedile al agente que construya algo</text>}
+          fallback={
+            <box style={{ flexDirection: "column", marginTop: 1 }}>
+              <text style={{ fg: C.rule }}>{"───────────────────────"}</text>
+              <text style={{ fg: C.dim }}>{" awaiting deployment"}</text>
+            </box>
+          }
         >
           <Show
-            when={hasLinks()}
+            when={links()}
             fallback={
-              // Sin enlaces no hay jerarquía posible: se agrupa por subred, que
-              // es la estructura que importa en un lab.
+              // Sin enlaces no hay jerarquía: se agrupa por /24, que es la
+              // estructura que importa en un lab.
               <For each={groupBySubnet(props.topology)}>
                 {(g) => (
                   <>
-                    <text style={{ fg: "#4fd6be" }}>{g.label}</text>
-                    <For each={g.devices}>{(d) => <Row device={d} prefix="  " />}</For>
+                    <text style={{ fg: C.rule }}>{`── ${g.label} ${"─".repeat(Math.max(0, 20 - g.label.length))}`}</text>
+                    <For each={g.devices}>{(d) => <Row device={d} prefix=" " />}</For>
                   </>
                 )}
               </For>
             }
           >
-            <For each={buildForest(props.topology)}>
-              {(n, i) => (
-                <TreeNode node={n} depth={0} last={i() === buildForest(props.topology).length - 1} />
-              )}
+            <For each={forest()}>
+              {(n, i) => <TreeNode node={n} depth={0} last={i() === forest().length - 1} />}
             </For>
           </Show>
         </Show>
       </scrollbox>
+
+      <Show when={props.lastTool}>
+        <text style={{ fg: C.rule }}>{`/// ${props.lastTool}`}</text>
+      </Show>
     </box>
   )
 }

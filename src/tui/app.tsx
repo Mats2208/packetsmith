@@ -5,6 +5,7 @@ import type { Topology } from "../topology/model.ts"
 import { EMPTY, ingest } from "../topology/ingest.ts"
 import { Chat, shortToolName, type Turn } from "./chat.tsx"
 import { Canvas } from "./canvas.tsx"
+import { C } from "./theme.ts"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
@@ -19,6 +20,9 @@ export function App(props: { engine: Engine; model?: string }) {
   const [model, setModel] = createSignal(props.model ?? "…")
   const [cost, setCost] = createSignal(0)
   const [toolCount, setToolCount] = createSignal(0)
+  // Enlace con Packet Tracer: se deduce de si la ultima pt_* respondio bien.
+  // Es el unico dato binario que importa de un vistazo, y el unico verde.
+  const [bridgeLive, setBridgeLive] = createSignal(false)
 
   let session: Session | undefined
   // Tools del turno en curso, como signal para que el panel las muestre
@@ -55,9 +59,13 @@ export function App(props: { engine: Engine; model?: string }) {
             copy[i] = { ...copy[i]!, done: true, isError: ev.isError }
             return copy
           })
-          if (PT_TOOL.test(ev.name) && !ev.isError) {
-            setTopology((cur) => ingest(cur, ev.name, ev.output))
+          if (PT_TOOL.test(ev.name)) {
             setLastTool(shortToolName(ev.name))
+            // "no esta conectado" llega como resultado OK, no como error:
+            // hay que mirar el texto para saber si el bridge esta vivo.
+            const txt = typeof ev.output === "string" ? ev.output : JSON.stringify(ev.output ?? "")
+            setBridgeLive(!ev.isError && !/no est\u00e1 conectado|not connected/i.test(txt))
+            if (!ev.isError) setTopology((cur) => ingest(cur, ev.name, ev.output))
           }
           break
         }
@@ -98,22 +106,22 @@ export function App(props: { engine: Engine; model?: string }) {
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
       <box style={{ flexDirection: "row", height: 1, paddingLeft: 1 }}>
-        <text style={{ fg: "#4fd6be" }}>packetsmith</text>
-        <text style={{ fg: "#565f89" }}>
-          {`  ${props.engine.name} · ${model()} · ${toolCount()} tools · $${cost().toFixed(4)}`}
+        <text style={{ fg: C.fg }}>{"PACKETSMITH"}</text>
+        <text style={{ fg: C.rule }}>
+          {`  ${props.engine.name.toUpperCase()} / ${model().toUpperCase()}  ///  ${toolCount()} TOOLS  ///  $${cost().toFixed(4)}`}
         </text>
       </box>
 
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
         <Chat turns={turns()} streaming={streaming()} busy={busy()} liveTools={live()} />
-        <Canvas topology={topology()} lastTool={lastTool()} />
+        <Canvas topology={topology()} lastTool={lastTool()} live={bridgeLive()} />
       </box>
 
-      <box style={{ border: true, height: 3 }}>
+      <box style={{ border: true, borderColor: C.rule, height: 3 }}>
         <input
           focused
           value={draft()}
-          placeholder={busy() ? "esperando al agente…" : "describí la red que querés…"}
+          placeholder={busy() ? "/// working" : ">>> describí la red"}
           onInput={setDraft}
           onSubmit={submit}
         />

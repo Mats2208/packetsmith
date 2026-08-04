@@ -1,6 +1,7 @@
 // Panel izquierdo: la conversación. Presentación pura — quien corre el motor
 // y arma los turnos es app.tsx.
 import { For, Show } from "solid-js"
+import { C } from "./theme.ts"
 
 export interface Turn {
   role: "user" | "agent"
@@ -71,13 +72,13 @@ function Tools(props: { tools: NonNullable<Turn["tools"]> }) {
   return (
     <>
       <Show when={s().running.length}>
-        <text style={{ fg: "#e0af68" }}>{`   ● ${s().running.join(", ")}`}</text>
+        <text style={{ fg: C.fg }}>{`    ${s().running.join(", ")} …`}</text>
       </Show>
       <Show when={s().failed.length}>
-        <text style={{ fg: "#f7768e" }}>{`   ✗ ${s().failed.join(", ")}`}</text>
+        <text style={{ fg: C.alert }}>{`    ✗ ${s().failed.join(", ")}`}</text>
       </Show>
       <Show when={s().ok.length}>
-        <text style={{ fg: "#565f89" }}>{`   ✓ ${s().ok.join(", ")}`}</text>
+        <text style={{ fg: C.rule }}>{`    ${s().ok.join(" · ")}`}</text>
       </Show>
     </>
   )
@@ -89,8 +90,8 @@ function Body(props: { text: string }) {
     <For each={splitCode(props.text)}>
       {(part) =>
         part.code ? (
-          <box style={{ backgroundColor: "#12161c", paddingLeft: 1, marginTop: 1, marginBottom: 1 }}>
-            <text style={{ fg: "#7fd88f" }}>{part.text}</text>
+          <box style={{ backgroundColor: C.sunken, paddingLeft: 1, marginTop: 1, marginBottom: 1 }}>
+            <text style={{ fg: C.fg }}>{part.text}</text>
           </box>
         ) : (
           <text>{part.text.trim()}</text>
@@ -108,15 +109,17 @@ export function Chat(props: {
   liveTools?: NonNullable<Turn["tools"]>
 }) {
   return (
-    <box style={{ flexDirection: "column", flexGrow: 1, border: true, padding: 1 }}>
+    <box style={{ flexDirection: "column", flexGrow: 1, border: true, borderColor: C.rule, paddingLeft: 1, paddingRight: 1 }}>
       <scrollbox style={{ flexGrow: 1 }}>
         <For each={props.turns}>
           {(turn) => (
             <box style={{ flexDirection: "column", marginBottom: 1 }}>
               {/* Etiqueta de rol explícita: con solo un color y un símbolo no
                   se distingue de un vistazo quién dijo qué. */}
-              <text style={{ fg: turn.role === "user" ? "#4fd6be" : "#7aa2f7" }}>
-                {turn.role === "user" ? "VOS" : "AGENTE"}
+              {/* Framing direccional: el chevron dice de qué lado viene el
+                  mensaje sin gastar color ni una línea extra. */}
+              <text style={{ fg: turn.role === "user" ? C.operator : C.dim }}>
+                {turn.role === "user" ? ">>> VOS" : "<<< AGENTE"}
               </text>
               {/* Las tools van ANTES del texto: son lo que el agente hizo para
                   poder responder, y dejarlas después empujaba la respuesta
@@ -134,7 +137,7 @@ export function Chat(props: {
         {/* El turno en curso se pinta aparte: todavía no está cerrado. */}
         <Show when={props.streaming || props.liveTools?.length}>
           <box style={{ flexDirection: "column" }}>
-            <text style={{ fg: "#7aa2f7" }}>AGENTE</text>
+            <text style={{ fg: C.dim }}>{"<<< AGENTE"}</text>
             <Show when={props.liveTools?.length}>
               <Tools tools={props.liveTools!} />
             </Show>
@@ -146,7 +149,7 @@ export function Chat(props: {
       </scrollbox>
 
       <Show when={props.busy}>
-        <text style={{ fg: "#565f89" }}>pensando…</text>
+        <text style={{ fg: C.rule }}>{"/// working"}</text>
       </Show>
     </box>
   )
