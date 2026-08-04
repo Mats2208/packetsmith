@@ -48,9 +48,24 @@ export function buildForest(topo: Topology): Node[] {
     .sort((a, b) => a.x - b.x)
     .map(attach)
 
+  // Sin routers no hay raíz obvia, así que se elige el equipo con más enlaces:
+  // en una red de switches el núcleo es, por definición, el que más cuelga.
+  // Antes se tomaba el primero de la lista y solo funcionaba de casualidad.
+  if (!roots.length) {
+    const core = [...topo.devices].sort(
+      (a, b) => neighbors(topo, b.name).length - neighbors(topo, a.name).length)[0]
+    if (core) roots.push(attach(core))
+  }
+
   // Lo que quedó suelto va al final: esconderlo haría que el panel mienta
   // sobre lo que hay en el canvas.
-  const orphans = topo.devices.filter((d) => !taken.has(d.name)).map(attach)
+  //
+  // El bucle es a mano y no `.filter().map()`: el filter se evalúa ENTERO
+  // contra un `taken` todavía vacío, así que cada equipo se volvía raíz y el
+  // panel listaba la red dos veces —una como árbol y otra como lista plana
+  // debajo, que parecía continuación del árbol y no lo era.
+  const orphans: Node[] = []
+  for (const d of topo.devices) if (!taken.has(d.name)) orphans.push(attach(d))
 
   return [...roots, ...orphans]
 }

@@ -3,7 +3,7 @@
 import { expect, test, describe } from "bun:test"
 import { ingest, parseExportTopology, unwrapToolOutput, EMPTY } from "../src/topology/ingest.ts"
 import { kindOf, type Kind } from "../src/topology/model.ts"
-import { censusOf, groupBySubnet } from "../src/topology/tree.ts"
+import { buildForest, censusOf, groupBySubnet } from "../src/topology/tree.ts"
 
 const EXPORT = `=== Topology Export: 4 devices, 3 links ===
 
@@ -213,6 +213,63 @@ describe("groupBySubnet", () => {
     const groups = groupBySubnet(t)
     expect(groups[groups.length - 1]!.label).toBe("sin IP")
     expect(groups[groups.length - 1]!.devices[0]!.name).toBe("SW1")
+  })
+})
+
+describe("buildForest", () => {
+  const dev = (name: string, model: string) => ({ name, model, x: 0, y: 0, ports: [] })
+  const link = (a: string, b: string) => ({
+    a: { device: a, port: "" }, b: { device: b, port: "" }, wireless: false,
+  })
+
+  /** Todos los nombres del bosque, incluidos los repetidos. */
+  const flat = (nodes: ReturnType<typeof buildForest>): string[] =>
+    nodes.flatMap((n) => [n.device.name, ...flat(n.children)])
+
+  const CAMPUS = {
+    devices: [
+      dev("CORE-L3", "3560-24PS"),
+      dev("SW-NORTE", "2960"), dev("SW-CENTRO", "2960"), dev("SW-SUR", "2960"),
+      dev("PC-N1", "PC-PT"), dev("PC-N2", "PC-PT"),
+      dev("PC-C1", "PC-PT"), dev("PC-S1", "PC-PT"),
+    ],
+    links: [
+      link("CORE-L3", "SW-NORTE"), link("CORE-L3", "SW-CENTRO"), link("CORE-L3", "SW-SUR"),
+      link("SW-NORTE", "PC-N1"), link("SW-NORTE", "PC-N2"),
+      link("SW-CENTRO", "PC-C1"), link("SW-SUR", "PC-S1"),
+    ],
+  }
+
+  test("ningún equipo aparece dos veces", () => {
+    // El bug: `filter(no tomado).map(attach)` evalúa el filter ENTERO contra un
+    // `taken` todavía vacío, así que cada equipo se volvía raíz. El panel
+    // listaba la red dos veces —árbol arriba y lista plana debajo— y la
+    // segunda parecía continuación de la primera.
+    const nombres = flat(buildForest(CAMPUS))
+    expect(nombres).toHaveLength(CAMPUS.devices.length)
+    expect(new Set(nombres).size).toBe(CAMPUS.devices.length)
+  })
+
+  test("sin routers, la raíz es el equipo con más enlaces", () => {
+    // Una red de puro switch no tiene raíz obvia. Antes se tomaba el primero
+    // de la lista y funcionaba solo de casualidad.
+    const bosque = buildForest(CAMPUS)
+    expect(bosque).toHaveLength(1)
+    expect(bosque[0]!.device.name).toBe("CORE-L3")
+  })
+
+  test("la raíz sigue siendo el router cuando lo hay", () => {
+    const conRouter = {
+      devices: [...CAMPUS.devices, dev("R-EDGE", "2911")],
+      links: [...CAMPUS.links, link("R-EDGE", "CORE-L3")],
+    }
+    expect(buildForest(conRouter)[0]!.device.name).toBe("R-EDGE")
+  })
+
+  test("un equipo sin ningún enlace igual aparece", () => {
+    // Esconderlo haría que el panel mienta sobre lo que hay en el canvas.
+    const suelto = { devices: [...CAMPUS.devices, dev("SW-HUERFANO", "2960")], links: CAMPUS.links }
+    expect(flat(buildForest(suelto))).toContain("SW-HUERFANO")
   })
 })
 
