@@ -37,10 +37,50 @@ export function splitCode(text: string): { code: boolean; text: string }[] {
   return out.filter((p) => p.text.trim())
 }
 
-function ToolLine(props: { name: string; done: boolean; isError: boolean }) {
-  const icon = () => (props.isError ? "✗" : props.done ? "✓" : "●")
-  const color = () => (props.isError ? "red" : props.done ? "green" : "yellow")
-  return <text style={{ fg: color() }}>{`   ${icon()} ${shortToolName(props.name)}`}</text>
+/**
+ * Resume las tools de un turno en una línea.
+ *
+ * Un deploy real dispara 20+ llamadas y listarlas una por una tapaba la
+ * respuesta del agente —que es lo que el usuario vino a leer— con una columna
+ * de checks repetidos. Se colapsan las repetidas (`pt_verify_connectivity ×5`)
+ * y los errores se muestran aparte, porque esos sí hay que verlos.
+ */
+export function summarizeTools(tools: NonNullable<Turn["tools"]>): {
+  ok: string[]
+  failed: string[]
+  running: string[]
+} {
+  const tally = (list: typeof tools) => {
+    const counts = new Map<string, number>()
+    for (const t of list) {
+      const n = shortToolName(t.name)
+      counts.set(n, (counts.get(n) ?? 0) + 1)
+    }
+    return [...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n))
+  }
+
+  return {
+    ok: tally(tools.filter((t) => t.done && !t.isError)),
+    failed: tally(tools.filter((t) => t.done && t.isError)),
+    running: tally(tools.filter((t) => !t.done)),
+  }
+}
+
+function Tools(props: { tools: NonNullable<Turn["tools"]> }) {
+  const s = () => summarizeTools(props.tools)
+  return (
+    <>
+      <Show when={s().running.length}>
+        <text style={{ fg: "#e0af68" }}>{`   ● ${s().running.join(", ")}`}</text>
+      </Show>
+      <Show when={s().failed.length}>
+        <text style={{ fg: "#f7768e" }}>{`   ✗ ${s().failed.join(", ")}`}</text>
+      </Show>
+      <Show when={s().ok.length}>
+        <text style={{ fg: "#565f89" }}>{`   ✓ ${s().ok.join(", ")}`}</text>
+      </Show>
+    </>
+  )
 }
 
 /** Prosa y código; el código va con fondo propio para que se despegue. */
@@ -60,7 +100,13 @@ function Body(props: { text: string }) {
   )
 }
 
-export function Chat(props: { turns: Turn[]; streaming: string; busy: boolean }) {
+export function Chat(props: {
+  turns: Turn[]
+  streaming: string
+  busy: boolean
+  /** Tools del turno EN CURSO: se ven mientras corren, no al terminar. */
+  liveTools?: NonNullable<Turn["tools"]>
+}) {
   return (
     <box style={{ flexDirection: "column", flexGrow: 1, border: true, padding: 1 }}>
       <scrollbox style={{ flexGrow: 1 }}>
@@ -72,21 +118,29 @@ export function Chat(props: { turns: Turn[]; streaming: string; busy: boolean })
               <text style={{ fg: turn.role === "user" ? "#4fd6be" : "#7aa2f7" }}>
                 {turn.role === "user" ? "VOS" : "AGENTE"}
               </text>
+              {/* Las tools van ANTES del texto: son lo que el agente hizo para
+                  poder responder, y dejarlas después empujaba la respuesta
+                  fuera de pantalla en cualquier deploy real. */}
+              <Show when={turn.tools?.length}>
+                <Tools tools={turn.tools!} />
+              </Show>
               <Show when={turn.role === "agent"} fallback={<text>{`  ${turn.text}`}</text>}>
                 <Body text={turn.text} />
               </Show>
-              <For each={turn.tools ?? []}>
-                {(t) => <ToolLine name={t.name} done={t.done} isError={t.isError} />}
-              </For>
             </box>
           )}
         </For>
 
         {/* El turno en curso se pinta aparte: todavía no está cerrado. */}
-        <Show when={props.streaming}>
+        <Show when={props.streaming || props.liveTools?.length}>
           <box style={{ flexDirection: "column" }}>
             <text style={{ fg: "#7aa2f7" }}>AGENTE</text>
-            <text>{props.streaming}</text>
+            <Show when={props.liveTools?.length}>
+              <Tools tools={props.liveTools!} />
+            </Show>
+            <Show when={props.streaming}>
+              <text>{props.streaming}</text>
+            </Show>
           </box>
         </Show>
       </scrollbox>

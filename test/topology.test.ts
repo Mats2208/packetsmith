@@ -3,6 +3,7 @@
 import { expect, test, describe } from "bun:test"
 import { ingest, parseExportTopology, unwrapToolOutput, EMPTY } from "../src/topology/ingest.ts"
 import { kindOf, type Kind } from "../src/topology/model.ts"
+import { groupBySubnet } from "../src/topology/tree.ts"
 
 const EXPORT = `=== Topology Export: 4 devices, 3 links ===
 
@@ -126,5 +127,91 @@ describe("kindOf", () => {
 
   test.each(CASES)("%s → %s", (model, expected) => {
     expect(kindOf(model)).toBe(expected)
+  })
+})
+
+// ── Lo que rompió el panel en la primera prueba real ────────────────────────
+
+const QUERY = `DEVICES:4|LINKS:3
+
+  R1                   [2911]  (Vlan1,GigabitEthernet0/0=10.0.0.1/255.255.255.252,GigabitEthernet0/1=192.168.0.1/255.255.255.0)
+  SW1                  [2960-24TT]  (Vlan1,FastEthernet0/1,GigabitEthernet0/1)
+  PC1                  [PC-PT]  (FastEthernet0=192.168.0.2/255.255.255.0,Bluetooth)
+  PC2                  [PC-PT]  (FastEthernet0=192.168.0.3/255.255.255.0,Bluetooth)
+`
+
+const FULL_BUILD = `============================================================
+RESUMEN DE TOPOLOGÍA
+============================================================
+Dispositivos: 3
+
+PLAN JSON (para uso programático)
+{
+  "name": "topology",
+  "devices": [
+    {"name":"R1","model":"2911","x":100,"y":100,"interfaces":{"GigabitEthernet0/0":"192.168.0.1/24"}},
+    {"name":"SW1","model":"2960-24TT","x":100,"y":250,"interfaces":{}},
+    {"name":"PC1","model":"PC-PT","x":60,"y":400,"interfaces":{"FastEthernet0":"192.168.0.2/24"}}
+  ],
+  "links": [
+    {"device_a":"R1","port_a":"GigabitEthernet0/0","device_b":"SW1","port_b":"GigabitEthernet0/1","cable":"straight"},
+    {"device_a":"SW1","port_a":"FastEthernet0/1","device_b":"PC1","port_b":"FastEthernet0","cable":"straight"}
+  ]
+}`
+
+describe("ingest de las tools que el agente USA de verdad", () => {
+  // El bug de la primera prueba real: el deploy funcionó, el agente llamó
+  // pt_full_build / pt_query_topology / pt_health_check, y el panel quedó
+  // vacío porque el ingest solo miraba pt_export_topology.
+  test("pt_query_topology puebla el panel", () => {
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_query_topology", JSON.stringify({ result: QUERY }))
+    expect(t.devices).toHaveLength(4)
+    expect(t.devices[0]).toMatchObject({ name: "R1", model: "2911" })
+  })
+
+  test("pt_query_topology separa las IPs de los puertos", () => {
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_query_topology", JSON.stringify({ result: QUERY }))
+    const r1 = t.devices[0]!
+    expect(r1.ports.find((p) => p.name === "GigabitEthernet0/1")?.ip).toBe("192.168.0.1/255.255.255.0")
+    // Vlan1 no tiene IP: no debe inventarse una.
+    expect(r1.ports.find((p) => p.name === "Vlan1")?.ip).toBeUndefined()
+  })
+
+  test("pt_full_build trae equipos Y enlaces del plan JSON", () => {
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_full_build", JSON.stringify({ result: FULL_BUILD }))
+    expect(t.devices).toHaveLength(3)
+    expect(t.links).toHaveLength(2)
+    expect(t.links[0]).toMatchObject({ a: { device: "R1" }, b: { device: "SW1" } })
+  })
+
+  test("un query posterior no borra los enlaces que ya teníamos", () => {
+    // query_topology no trae enlaces. Si los pisara, el árbol se aplanaría
+    // cada vez que el agente consulta el estado.
+    const built = ingest(EMPTY, "mcp__packet-tracer__pt_full_build", JSON.stringify({ result: FULL_BUILD }))
+    const after = ingest(built, "mcp__packet-tracer__pt_query_topology", JSON.stringify({ result: QUERY }))
+    expect(after.links).toHaveLength(2)
+    expect(after.devices).toHaveLength(4)
+  })
+
+  test("pt_health_check no toca la topología", () => {
+    const built = ingest(EMPTY, "mcp__packet-tracer__pt_full_build", JSON.stringify({ result: FULL_BUILD }))
+    expect(ingest(built, "mcp__packet-tracer__pt_health_check", '{"result":"ok"}')).toBe(built)
+  })
+})
+
+describe("groupBySubnet", () => {
+  test("agrupa por /24 cuando no hay enlaces", () => {
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_query_topology", JSON.stringify({ result: QUERY }))
+    const groups = groupBySubnet(t)
+    const lan = groups.find((g) => g.label === "192.168.0.0/24")!
+    expect(lan.devices.map((d) => d.name)).toContain("PC1")
+    expect(lan.devices.map((d) => d.name)).toContain("PC2")
+  })
+
+  test("los equipos sin IP van al final", () => {
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_query_topology", JSON.stringify({ result: QUERY }))
+    const groups = groupBySubnet(t)
+    expect(groups[groups.length - 1]!.label).toBe("sin IP")
+    expect(groups[groups.length - 1]!.devices[0]!.name).toBe("SW1")
   })
 })

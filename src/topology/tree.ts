@@ -1,6 +1,6 @@
 // Arma la jerarquía que se dibuja en el panel: router → switches → hosts.
 //
-// PT no guarda ninguna jerarquía: da una lista plana de dispositivos y otra de
+// PT no guarda ninguna jerarquía: da una lista plana de equipos y otra de
 // enlaces. El árbol se deduce siguiendo los enlaces desde cada router, que es
 // como se lee una topología de laboratorio.
 import type { Device, Topology } from "./model.ts"
@@ -11,7 +11,7 @@ export interface Node {
   children: Node[]
 }
 
-/** Nombres de los dispositivos conectados a `name`, sin repetir. */
+/** Nombres de los equipos conectados a `name`, sin repetir. */
 function neighbors(topo: Topology, name: string): string[] {
   const out = new Set<string>()
   for (const l of topo.links) {
@@ -22,9 +22,9 @@ function neighbors(topo: Topology, name: string): string[] {
 }
 
 /**
- * Construye el bosque. Un dispositivo se cuelga del primer padre que lo
- * alcanza, así que nunca aparece dos veces aunque tenga varios enlaces —
- * si no, un switch con dos uplinks saldría duplicado.
+ * Construye el bosque. Un equipo se cuelga del primer padre que lo alcanza,
+ * así que nunca aparece dos veces aunque tenga varios enlaces — si no, un
+ * switch con dos uplinks saldría duplicado.
  */
 export function buildForest(topo: Topology): Node[] {
   const byName = new Map(topo.devices.map((d) => [d.name, d]))
@@ -43,23 +43,55 @@ export function buildForest(topo: Topology): Node[] {
     return { device: d, children }
   }
 
-  // Los routers primero y de izquierda a derecha, que es como están en el
-  // canvas de PT: así el panel y la pantalla de PT se leen igual.
   const roots = topo.devices
     .filter((d) => kindOf(d.model) === "router")
     .sort((a, b) => a.x - b.x)
     .map(attach)
 
-  // Lo que quedó suelto (un switch sin router, un equipo sin cablear) va al
-  // final: esconderlo haría que el panel mienta sobre lo que hay en el canvas.
+  // Lo que quedó suelto va al final: esconderlo haría que el panel mienta
+  // sobre lo que hay en el canvas.
   const orphans = topo.devices.filter((d) => !taken.has(d.name)).map(attach)
 
   return [...roots, ...orphans]
 }
 
-/** IPs de un dispositivo, sin la máscara, para que entren en el panel. */
+/** IPs de un equipo, sin la máscara, para que entren en el panel. */
 export function addressesOf(d: Device): string[] {
-  return d.ports
-    .filter((p) => p.ip)
-    .map((p) => p.ip!.split("/")[0]!)
+  return d.ports.filter((p) => p.ip).map((p) => p.ip!.split("/")[0]!)
+}
+
+/** `192.168.0.5/255.255.255.0` → `192.168.0` — la /24 a la que pertenece. */
+function subnetOf(ip: string): string {
+  return ip.split("/")[0]!.split(".").slice(0, 3).join(".")
+}
+
+export interface Group {
+  /** `192.168.0.0/24`, o "sin IP" para los equipos que no tienen ninguna. */
+  label: string
+  devices: Device[]
+}
+
+/**
+ * Agrupa por subred, para cuando NO hay enlaces.
+ *
+ * `pt_query_topology` devuelve equipos sin enlaces, y una lista plana de 36
+ * nombres no dice nada. Agrupar por /24 recupera la estructura que importa en
+ * un lab: qué equipos comparten red.
+ */
+export function groupBySubnet(topo: Topology): Group[] {
+  const groups = new Map<string, Device[]>()
+
+  for (const d of topo.devices) {
+    const ips = addressesOf(d)
+    // Un equipo con varias IPs (un router) va en la primera: es su LAN.
+    const key = ips.length ? `${subnetOf(ips[ips.length - 1]!)}.0/24` : "sin IP"
+    const list = groups.get(key)
+    if (list) list.push(d)
+    else groups.set(key, [d])
+  }
+
+  return [...groups.entries()]
+    .map(([label, devices]) => ({ label, devices }))
+    // "sin IP" siempre al final: es lo menos informativo.
+    .sort((a, b) => (a.label === "sin IP" ? 1 : b.label === "sin IP" ? -1 : a.label.localeCompare(b.label)))
 }

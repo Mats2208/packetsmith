@@ -21,9 +21,9 @@ export function App(props: { engine: Engine; model?: string }) {
   const [toolCount, setToolCount] = createSignal(0)
 
   let session: Session | undefined
-  // Tools del turno en curso. Es un array mutable a propósito: se actualiza en
-  // vivo y la lista de turnos se reemplaza para disparar el re-render.
-  let live: NonNullable<Turn["tools"]> = []
+  // Tools del turno en curso, como signal para que el panel las muestre
+  // mientras corren en vez de recién al cerrar el turno.
+  const [live, setLive] = createSignal<NonNullable<Turn["tools"]>>([])
 
   onMount(() => {
     session = props.engine.start({ model: props.model })
@@ -44,24 +44,27 @@ export function App(props: { engine: Engine; model?: string }) {
           break
 
         case "tool_start":
-          live.push({ name: ev.name, done: false, isError: false })
-          setTurns((t) => [...t])
+          setLive((l) => [...l, { name: ev.name, done: false, isError: false }])
           break
 
         case "tool_end": {
-          const t = live.find((x) => x.name === ev.name && !x.done)
-          if (t) { t.done = true; t.isError = ev.isError }
+          setLive((l) => {
+            const i = l.findIndex((x) => x.name === ev.name && !x.done)
+            if (i === -1) return l
+            const copy = [...l]
+            copy[i] = { ...copy[i]!, done: true, isError: ev.isError }
+            return copy
+          })
           if (PT_TOOL.test(ev.name) && !ev.isError) {
             setTopology((cur) => ingest(cur, ev.name, ev.output))
             setLastTool(shortToolName(ev.name))
           }
-          setTurns((x) => [...x])
           break
         }
 
         case "turn_end": {
-          const tools = live
-          live = []
+          const tools = live()
+          setLive([])
           setCost((c) => c + ev.costUsd)
           setTurns((t) => [...t, { role: "agent", text: ev.text || streaming(), tools }])
           setStreaming("")
@@ -70,8 +73,8 @@ export function App(props: { engine: Engine; model?: string }) {
         }
 
         case "error":
-          setTurns((t) => [...t, { role: "agent", text: `⚠ ${ev.message}`, tools: live }])
-          live = []
+          setTurns((t) => [...t, { role: "agent", text: `⚠ ${ev.message}`, tools: live() }])
+          setLive([])
           setStreaming("")
           setBusy(false)
           break
@@ -102,7 +105,7 @@ export function App(props: { engine: Engine; model?: string }) {
       </box>
 
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
-        <Chat turns={turns()} streaming={streaming()} busy={busy()} />
+        <Chat turns={turns()} streaming={streaming()} busy={busy()} liveTools={live()} />
         <Canvas topology={topology()} lastTool={lastTool()} />
       </box>
 
