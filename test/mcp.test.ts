@@ -5,7 +5,7 @@ import { expect, test, describe } from "bun:test"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { findServer, scopeToPacketTracer } from "../src/engine/mcp.ts"
+import { findServer, isConfigured, scopeToPacketTracer } from "../src/engine/mcp.ts"
 
 const PT = { type: "stdio", command: "/venv/bin/python", args: ["-m", "packet_tracer_mcp"] }
 
@@ -32,6 +32,22 @@ describe("findServer", () => {
     expect(findServer({ mcpServers: { blender: {} } }, "/x")).toBeUndefined()
     expect(findServer({}, "/x")).toBeUndefined()
     expect(findServer(null, "/x")).toBeUndefined()
+  })
+})
+
+describe("isConfigured", () => {
+  // Es la única dependencia que la app no puede resolver sola, y falla de la
+  // peor manera: el agente arranca, contesta, y no tiene una sola tool pt_*.
+  test("dice que sí cuando el servidor está registrado", () => {
+    expect(isConfigured(home({ mcpServers: { "packet-tracer": PT } }), "/x")).toBe(true)
+  })
+
+  test("dice que no sin servidor, sin archivo o con el archivo roto", () => {
+    expect(isConfigured(home({ mcpServers: { blender: {} } }), "/x")).toBe(false)
+    expect(isConfigured(home(), "/x")).toBe(false)
+    const roto = home()
+    writeFileSync(join(roto, ".claude.json"), "{ no soy json")
+    expect(isConfigured(roto, "/x")).toBe(false)
   })
 })
 

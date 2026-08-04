@@ -39,7 +39,11 @@ const EJEMPLOS = [
   "segmentá en VLANs por departamento",
 ] as const
 
-export function Welcome(props: { live?: boolean }) {
+export function Welcome(props: {
+  live?: boolean
+  /** Si el MCP de Packet Tracer está registrado en el CLI. */
+  mcp?: boolean
+}) {
   return (
     <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
       <Art rows={wordmark()} />
@@ -92,18 +96,34 @@ export function Welcome(props: { live?: boolean }) {
 
         {/* Estado en vivo, no un cartel. La pregunta que se hace todo el mundo
             al abrir esto es si el puente con Packet Tracer está levantado, y
-            acá se contesta antes de que la haga. */}
+            acá se contesta antes de que la haga.
+
+            El MCP va PRIMERO cuando falta: sin él el agente no tiene una sola
+            tool pt_*, así que el estado del puente da igual —y decir "sin
+            conexión" mandaría a revisar Packet Tracer, que no es el problema. */}
         <box style={{ flexDirection: "row", height: 1 }}>
-          <text style={{ fg: props.live ? C.live : C.rule, flexShrink: 0 }}>
-            {props.live ? "● packet tracer conectado" : "○ packet tracer sin conexión"}
-          </text>
+          <Show
+            when={props.mcp === false}
+            fallback={
+              <text style={{ fg: props.live ? C.live : C.rule, flexShrink: 0 }}>
+                {props.live ? "● packet tracer conectado" : "○ packet tracer sin conexión"}
+              </text>
+            }
+          >
+            <text style={{ fg: C.warn, flexShrink: 0 }}>{"⚠ falta el MCP de packet tracer"}</text>
+          </Show>
           {/* `minWidth` y no solo `flexGrow`: en un panel angosto el hueco
               elástico se colapsa a cero y los dos textos se pegan
               ("conectado⏎ enviar"). Dos columnas siempre. */}
           <box style={{ flexGrow: 1, minWidth: 2 }} />
           <text style={{ fg: C.rule, flexShrink: 0 }}>{"⏎ enviar · ⇧⏎ línea"}</text>
         </box>
-        <Show when={!props.live}>
+        <Show when={props.mcp === false}>
+          <text style={{ fg: C.rule }}>
+            {"  claude mcp add packet-tracer -- <python> -m packet_tracer_mcp --stdio"}
+          </text>
+        </Show>
+        <Show when={props.mcp !== false && !props.live}>
           <text style={{ fg: C.rule }}>{"  abrí Extensiones ▸ MCP BUILDER en Packet Tracer"}</text>
         </Show>
       </box>

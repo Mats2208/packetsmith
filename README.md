@@ -9,18 +9,18 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OpenTUI](https://img.shields.io/badge/OpenTUI-Solid-4051B5?style=flat-square)](https://github.com/sst/opentui)
 [![MCP](https://img.shields.io/badge/protocol-MCP-00B4D8?style=flat-square)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-174%20passing-3fb950?style=flat-square)](test/)
+[![Tests](https://img.shields.io/badge/tests-177%20passing-3fb950?style=flat-square)](test/)
 [![License](https://img.shields.io/github/license/Mats2208/packetsmith?style=flat-square&color=green)](LICENSE)
 
 <br/>
 
 <table>
 <tr>
-<td align="center"><strong>No MCP setup</strong><br/><sub>open it and talk</sub></td>
+<td align="center"><strong>Purpose-built UI</strong><br/><sub>not a chat window</sub></td>
 <td align="center"><strong>Live topology</strong><br/><sub>tree + canvas plan</sub></td>
 <td align="center"><strong>Real verification</strong><br/><sub>pings, not promises</sub></td>
 <td align="center"><strong>Plan + context meters</strong><br/><sub>know what you're burning</sub></td>
-<td align="center"><strong>174 tests</strong><br/><sub>UI included</sub></td>
+<td align="center"><strong>177 tests</strong><br/><sub>UI included</sub></td>
 </tr>
 </table>
 
@@ -89,13 +89,28 @@ Working today: the streaming engine, the split-screen TUI, the fabric tree and c
 
 ## Requirements
 
-- [Bun](https://bun.sh) ≥ 1.3 — OpenTUI needs it; this will not run on Node
-- Cisco Packet Tracer with the [MCP-Packet-Tracer](https://github.com/Mats2208/MCP-Packet-Tracer) extension
-- `claude` CLI, authenticated
+PacketSmith **runs on top of the MCP — it does not bundle it.** Three pieces, in this order:
+
+| | Why | How |
+|---|---|---|
+| [Bun](https://bun.sh) ≥ 1.3 | OpenTUI needs it — this will **not** run on Node | `brew install oven-sh/bun/bun` |
+| `claude` CLI, authenticated | PacketSmith spawns it; it is the agent | [claude.com/claude-code](https://claude.com/claude-code) |
+| [MCP-Packet-Tracer](https://github.com/Mats2208/MCP-Packet-Tracer) **registered with the CLI** | it is what actually drives Packet Tracer | `claude mcp add packet-tracer …` |
+
+Plus Cisco Packet Tracer itself, running, with **Extensions ▸ MCP BUILDER** open.
+
+If the MCP is not registered, PacketSmith says so on its first screen and prints the command
+— because the failure is silent otherwise: the agent starts, answers normally, and has no
+`pt_*` tools at all.
 
 ## Run
 
+There is **no npm package yet** — and `npm install` would not work anyway, since this needs
+Bun rather than Node. Clone it:
+
 ```bash
+git clone https://github.com/Mats2208/packetsmith
+cd packetsmith
 bun install
 bun run src/index.tsx
 ```
@@ -119,15 +134,18 @@ PACKETSMITH_ALL_MCP=1  bun run src/index.tsx   # load every MCP server, not just
 
 ## This or the MCP?
 
-|  | [MCP-Packet-Tracer](https://github.com/Mats2208/MCP-Packet-Tracer) | PacketSmith |
-|---|---|---|
-| How you use it | inside Claude Code, Cursor, Claude Desktop | its own terminal app |
-| MCP setup required | yes | no |
-| Interface | whatever your client gives you | split screen with live topology |
-| Pick your engine | no | Claude *(Codex / OpenCode coming)* |
-| Best for | you already use an MCP client | you want something that just runs |
+Wrong question — **PacketSmith runs the MCP underneath.** You need it either way. What changes is what sits on top:
 
-**PacketSmith uses the MCP under the hood — it does not replace it.** If you already live in Claude Code, the MCP alone is all you need.
+|  | The MCP alone | The MCP + PacketSmith |
+|---|---|---|
+| Where you talk | Claude Code, Cursor, Claude Desktop | a terminal app built for this one job |
+| What you see | a chat log, and Packet Tracer in another window | split screen: reply left, live topology right |
+| Topology | you read it out of the tool output | fabric tree and canvas plan, drawn for you |
+| Turn cost | whatever your client shows | context, plan quota, and where the time went |
+| Tools loaded | every MCP server you have configured | Packet Tracer only — measurably faster to start |
+| Engine | your client decides | Claude *(Codex / OpenCode coming)* |
+
+**If you already live in Claude Code, the MCP alone is all you need.** PacketSmith is for when you want the topology in front of you instead of buried in a scrollback.
 
 ## How it works
 
@@ -157,7 +175,7 @@ Every `pt_*` call is one HTTP round-trip to Packet Tracer, strictly serial — `
 ## Development
 
 ```bash
-bun test          # 174 tests — engine, topology and rendered UI frames
+bun test          # 177 tests — engine, topology and rendered UI frames
 bun run typecheck
 bun run preview   # print the UI in fixed states, without an agent or Packet Tracer
 bun run shots     # regenerate the README screenshots from the source

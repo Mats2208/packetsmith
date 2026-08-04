@@ -444,6 +444,17 @@ describe("pantalla de bienvenida", () => {
     expect(frame).toContain("OSPF")
   })
 
+  test("si falta el MCP lo dice ANTES que el estado del puente", async () => {
+    // Sin el MCP el agente arranca igual y contesta igual, pero sin una sola
+    // tool pt_*. Falla de la peor manera posible —parece que funciona—, y decir
+    // "packet tracer sin conexión" mandaría a revisar el lugar equivocado.
+    const frame = await frameOf(
+      () => Chat({ turns: [], streaming: "", busy: false, live: false, mcp: false }), 76, 26)
+    expect(frame).toContain("falta el MCP")
+    expect(frame).toContain("claude mcp add packet-tracer")
+    expect(frame).not.toContain("MCP BUILDER")
+  })
+
   test("el estado del puente es en vivo, no un cartel", async () => {
     // La pregunta que se hace todo el mundo al abrir esto es si Packet Tracer
     // está conectado. Se contesta antes de que la haga.

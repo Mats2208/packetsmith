@@ -32,6 +32,22 @@ export function findServer(config: unknown, cwd: string): unknown {
 }
 
 /**
+ * Si el MCP de Packet Tracer está registrado en el CLI.
+ *
+ * Es la dependencia que la app NO puede resolver sola: sin ese servidor el
+ * agente arranca igual y contesta igual, pero sin una sola tool `pt_*`, o sea
+ * sin poder tocar Packet Tracer. Falla de la peor manera posible —parece que
+ * funciona— así que conviene decirlo antes de que escriba el primer mensaje.
+ */
+export function isConfigured(home: string, cwd: string): boolean {
+  try {
+    return Boolean(findServer(JSON.parse(readFileSync(`${home}/.claude.json`, "utf8")), cwd))
+  } catch {
+    return false
+  }
+}
+
+/**
  * Deja escrito un archivo con solo el servidor de Packet Tracer y devuelve los
  * flags para usarlo. Vacío si no se encontró: se falla ABIERTO.
  */

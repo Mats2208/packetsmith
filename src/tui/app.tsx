@@ -3,6 +3,7 @@ import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { homedir } from "node:os"
 import type { Engine, Limits, Phase, Session, Usage } from "../engine/types.ts"
 import { pollQuota, type Quota } from "../engine/quota.ts"
+import { isConfigured } from "../engine/mcp.ts"
 import type { Topology } from "../topology/model.ts"
 import { EMPTY, ingest } from "../topology/ingest.ts"
 import { Chat, shortToolName, type Turn } from "./chat.tsx"
@@ -177,6 +178,10 @@ export function App(props: {
   let session: Session | undefined
   // Disposición del último plano dibujado, para no repetirlo turno tras turno.
   let mapped = ""
+  // Si el MCP está registrado. Se mira UNA vez, al arrancar: es config del
+  // disco, no cambia mientras la app corre, y es la única dependencia que la
+  // app no puede resolver sola.
+  const mcpReady = isConfigured(homedir(), process.cwd())
   // Cronometraje del turno: cuándo arrancó cada tool y cuánto sumaron todas.
   const openedAt = new Map<string, number>()
   let toolMs = 0
@@ -353,6 +358,7 @@ export function App(props: {
           busy={busy()}
           liveTools={live()}
           live={bridgeLive()}
+          mcp={mcpReady}
           // Lo que sobra después del panel, los márgenes del chat y la canaleta
           // del mensaje. Si sobra menos de 30 el plano no se dibuja: mejor nada
           // que un plano con nodos cortados.

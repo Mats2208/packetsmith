@@ -441,6 +441,8 @@ export function Chat(props: {
   liveTools?: NonNullable<Turn["tools"]>
   /** Estado del puente con PT, para la pantalla de arranque. */
   live?: boolean
+  /** Si el MCP de Packet Tracer está registrado en el CLI. */
+  mcp?: boolean
   /** Ancho útil para el plano. Lo calcula quien sabe cuánto mide la terminal. */
   mapWidth?: number
 }) {
@@ -452,7 +454,7 @@ export function Chat(props: {
   return (
     <box style={{ flexDirection: "column", flexGrow: 1, paddingLeft: 1, paddingRight: 1 }}>
       <Show when={vacio()}>
-        <Welcome live={props.live} />
+        <Welcome live={props.live} mcp={props.mcp} />
       </Show>
 
       <Show when={!vacio()}>
