@@ -18,11 +18,14 @@
 //   assistant → content[] con {type:"tool_use", id, name, input}
 //   user      → content[] con {type:"tool_result", tool_use_id, content}
 //   result    → total_cost_usd, result   (fin de turno, NO de sesión)
+import { unlinkSync } from "node:fs"
+import { homedir } from "node:os"
 import type { AgentEvent, Engine, Session, StartOpts } from "./types.ts"
 import { jsonLines } from "./stream.ts"
 import { SYSTEM_PROMPT } from "./prompt.ts"
+import { scopeToPacketTracer } from "./mcp.ts"
 
-export function buildArgs(opts: StartOpts): string[] {
+export function buildArgs(opts: StartOpts & { mcpArgs?: string[] }): string[] {
   const args = [
     "-p",
     "--input-format", "stream-json",
@@ -39,6 +42,9 @@ export function buildArgs(opts: StartOpts): string[] {
     // muestra. `--append-system-prompt` suma al suyo en vez de reemplazarlo.
     "--append-system-prompt", SYSTEM_PROMPT,
   ]
+  // Acota el agente al MCP de Packet Tracer. Sin esto hereda toda la config
+  // del usuario, y sus definiciones de tools viajan en cada pedido.
+  if (opts.mcpArgs?.length) args.push(...opts.mcpArgs)
   if (opts.model) args.push("--model", opts.model)
   if (opts.allowedTools) {
     // Lista vacía = "sin ninguna tool", pero el flag igual necesita un valor:
@@ -215,7 +221,9 @@ export const claude: Engine = {
   name: "claude",
 
   start(opts: StartOpts): Session {
-    const proc = Bun.spawn(["claude", ...buildArgs(opts)], {
+    const cwd = opts.cwd ?? process.cwd()
+    const mcp = scopeToPacketTracer(homedir(), cwd)
+    const proc = Bun.spawn(["claude", ...buildArgs({ ...opts, mcpArgs: mcp.args })], {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
@@ -253,6 +261,9 @@ export const claude: Engine = {
         closed = true
         proc.stdin.end()
         proc.kill()
+        // El archivo de config temporal se va con la sesión. Si falla no
+        // importa: es un JSON de dos líneas en el directorio temporal.
+        if (mcp.path) try { unlinkSync(mcp.path) } catch { /* ya no estaba */ }
       },
     }
   },
