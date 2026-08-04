@@ -163,11 +163,19 @@ export function* translate(
 }
 
 /**
- * Cuánto contexto quedó ocupado después del turno.
+ * Cuánto contexto ocupa la conversación después del turno.
  *
- * Se suman los cuatro contadores porque los tres de entrada —directa, caché
- * leído y caché escrito— ocupan ventana igual: mirar solo `input_tokens` daba
- * 2 sobre un millón después de un turno que había leído 15k de caché.
+ * Se lee la ÚLTIMA iteración, no el total del turno. Esto es lo que hacía que
+ * el medidor mintiera: un turno con cinco tools son cinco pedidos a la API, y
+ * `usage` de arriba los SUMA. Como cada pedido relee el contexto entero desde
+ * caché, sumarlos cuenta la misma conversación cinco veces — dos turnos
+ * marcaban 36% de un millón cuando el contexto real era una fracción de eso.
+ * El contexto no es acumulativo: es el tamaño del último prompt.
+ *
+ * Dentro de una iteración sí se suman los cuatro contadores, porque los tres de
+ * entrada —directa, caché leído y caché escrito— ocupan ventana igual: mirar
+ * solo `input_tokens` daba 2 sobre un millón después de un pedido que había
+ * leído 15k de caché.
  *
  * La ventana sale de `modelUsage`, que trae una entrada por modelo usado —los
  * subagentes de haiku aparecen ahí con sus 200k. Se busca la del modelo de la
@@ -178,11 +186,15 @@ export function readUsage(ev: Record<string, any>): { tokens: number; contextWin
   const u = ev.usage
   if (!u) return undefined
 
+  const last = Array.isArray(u.iterations) && u.iterations.length
+    ? u.iterations[u.iterations.length - 1]
+    : u
+
   const tokens =
-    Number(u.input_tokens ?? 0) +
-    Number(u.cache_read_input_tokens ?? 0) +
-    Number(u.cache_creation_input_tokens ?? 0) +
-    Number(u.output_tokens ?? 0)
+    Number(last.input_tokens ?? 0) +
+    Number(last.cache_read_input_tokens ?? 0) +
+    Number(last.cache_creation_input_tokens ?? 0) +
+    Number(last.output_tokens ?? 0)
 
   const models: Record<string, any> = ev.modelUsage ?? {}
   const windows = Object.values(models).map((m: any) => Number(m?.contextWindow ?? 0))

@@ -112,6 +112,28 @@ describe("cuota y contexto", () => {
     expect(usage).toEqual({ tokens: 34_527, contextWindow: 1_000_000 })
   })
 
+  test("el contexto es el último pedido, no la suma del turno", () => {
+    // Un turno con varias tools son varios pedidos a la API, y `usage` de
+    // arriba los SUMA. Como cada pedido relee el contexto entero desde caché,
+    // sumarlos cuenta la misma conversación varias veces: dos turnos marcaban
+    // 36% de un millón con un contexto real muy por debajo.
+    const usage = readUsage({
+      model: "m",
+      usage: {
+        input_tokens: 30,
+        cache_read_input_tokens: 300_000,
+        output_tokens: 300,
+        iterations: [
+          { input_tokens: 10, cache_read_input_tokens: 90_000, output_tokens: 100 },
+          { input_tokens: 10, cache_read_input_tokens: 100_000, output_tokens: 100 },
+          { input_tokens: 10, cache_read_input_tokens: 110_000, output_tokens: 100 },
+        ],
+      },
+      modelUsage: { m: { contextWindow: 1_000_000 } },
+    })
+    expect(usage!.tokens).toBe(110_110)
+  })
+
   test("la ventana es la del modelo principal, no la de un subagente", () => {
     // `modelUsage` trae una entrada por modelo usado: los subagentes de haiku
     // aparecen con sus 200k y tomarían el lugar del modelo de la sesión.
