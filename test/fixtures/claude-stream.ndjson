@@ -1,0 +1,11 @@
+{"type":"system","subtype":"init","session_id":"sess-abc","tools":["mcp__packet-tracer__pt_list_templates"]}
+Actualización disponible: claude 2.1.0 → 2.2.0
+{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg_1"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Voy a "}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"consultar."}}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01","name":"mcp__packet-tracer__pt_export_topology","input":{}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"{\"devices\":[{\"name\":\"R1\"}]}"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_02","name":"mcp__packet-tracer__pt_add_device","input":{"name":"R2","model":"2911"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_02","content":"boom","is_error":true}]}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" Listo."}}}
+{"type":"result","subtype":"success","session_id":"sess-abc","total_cost_usd":0.0123,"result":"Voy a consultar. Listo."}
