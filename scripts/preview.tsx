@@ -25,27 +25,42 @@ function fakeEngine(events: AgentEvent[]): Engine {
   }
 }
 
+// Las coordenadas son las de un canvas real de Packet Tracer: el plano bajo la
+// respuesta las usa tal cual, así que un fixture con todo en (0,0) no probaría
+// nada.
 const PLAN = JSON.stringify(
   {
     name: "lab",
     devices: [
-      { name: "R1", model: "2911", x: 200, y: 90, interfaces: { "Gi0/0": "10.0.0.1/255.255.255.252", "Gi0/1": "192.168.0.1/255.255.255.0" } },
-      { name: "R2", model: "2911", x: 500, y: 90, interfaces: { "Gi0/0": "10.0.0.2/255.255.255.252", "Gi0/1": "192.168.1.1/255.255.255.0" } },
-      { name: "SW1", model: "2960", x: 200, y: 240, interfaces: {} },
-      { name: "SW2", model: "2960", x: 500, y: 240, interfaces: {} },
-      { name: "PC1", model: "PC-PT", x: 120, y: 380, interfaces: { Fa0: "192.168.0.2/255.255.255.0" } },
-      { name: "PC2", model: "PC-PT", x: 260, y: 380, interfaces: { Fa0: "192.168.0.3/255.255.255.0" } },
-      { name: "PC3", model: "PC-PT", x: 420, y: 380, interfaces: { Fa0: "192.168.1.2/255.255.255.0" } },
-      { name: "SRV1", model: "Server-PT", x: 560, y: 380, interfaces: { Fa0: "192.168.1.10/255.255.255.0" } },
+      { name: "R-EDGE", model: "2911", x: 400, y: 60, interfaces: { "Gi0/0": "192.168.10.1/255.255.255.0" } },
+      { name: "SW-CORE", model: "3560-24PS", x: 400, y: 180, interfaces: { Vlan1: "192.168.10.2/255.255.255.0" } },
+      { name: "SW-VENTAS", model: "2960", x: 120, y: 300, interfaces: {} },
+      { name: "SW-IT", model: "2960", x: 300, y: 300, interfaces: {} },
+      { name: "SW-RRHH", model: "2960", x: 500, y: 300, interfaces: {} },
+      { name: "SW-DATACENTER", model: "2960", x: 680, y: 300, interfaces: {} },
+      { name: "PC-VEN1", model: "PC-PT", x: 80, y: 420, interfaces: { Fa0: "192.168.10.11/255.255.255.0" } },
+      { name: "PC-VEN2", model: "PC-PT", x: 165, y: 420, interfaces: { Fa0: "192.168.10.12/255.255.255.0" } },
+      { name: "PC-IT1", model: "PC-PT", x: 260, y: 420, interfaces: { Fa0: "192.168.10.21/255.255.255.0" } },
+      { name: "PC-IT2", model: "PC-PT", x: 345, y: 420, interfaces: { Fa0: "192.168.10.22/255.255.255.0" } },
+      { name: "PC-RH1", model: "PC-PT", x: 460, y: 420, interfaces: { Fa0: "192.168.10.31/255.255.255.0" } },
+      { name: "PC-RH2", model: "PC-PT", x: 545, y: 420, interfaces: { Fa0: "192.168.10.32/255.255.255.0" } },
+      { name: "SRV-WEB", model: "Server-PT", x: 640, y: 420, interfaces: { Fa0: "192.168.10.41/255.255.255.0" } },
+      { name: "SRV-DNS", model: "Server-PT", x: 725, y: 420, interfaces: { Fa0: "192.168.10.42/255.255.255.0" } },
     ],
     links: [
-      { device_a: "R1", port_a: "Gi0/0", device_b: "R2", port_b: "Gi0/0" },
-      { device_a: "R1", port_a: "Gi0/1", device_b: "SW1", port_b: "Gi0/1" },
-      { device_a: "R2", port_a: "Gi0/1", device_b: "SW2", port_b: "Gi0/1" },
-      { device_a: "SW1", port_a: "Fa0/1", device_b: "PC1", port_b: "Fa0" },
-      { device_a: "SW1", port_a: "Fa0/2", device_b: "PC2", port_b: "Fa0" },
-      { device_a: "SW2", port_a: "Fa0/1", device_b: "PC3", port_b: "Fa0" },
-      { device_a: "SW2", port_a: "Fa0/2", device_b: "SRV1", port_b: "Fa0" },
+      { device_a: "R-EDGE", port_a: "Gi0/0", device_b: "SW-CORE", port_b: "Gi0/1" },
+      { device_a: "SW-CORE", port_a: "Fa0/1", device_b: "SW-VENTAS", port_b: "Gi0/1" },
+      { device_a: "SW-CORE", port_a: "Fa0/2", device_b: "SW-IT", port_b: "Gi0/1" },
+      { device_a: "SW-CORE", port_a: "Fa0/3", device_b: "SW-RRHH", port_b: "Gi0/1" },
+      { device_a: "SW-CORE", port_a: "Fa0/4", device_b: "SW-DATACENTER", port_b: "Gi0/1" },
+      { device_a: "SW-VENTAS", port_a: "Fa0/1", device_b: "PC-VEN1", port_b: "Fa0" },
+      { device_a: "SW-VENTAS", port_a: "Fa0/2", device_b: "PC-VEN2", port_b: "Fa0" },
+      { device_a: "SW-IT", port_a: "Fa0/1", device_b: "PC-IT1", port_b: "Fa0" },
+      { device_a: "SW-IT", port_a: "Fa0/2", device_b: "PC-IT2", port_b: "Fa0" },
+      { device_a: "SW-RRHH", port_a: "Fa0/1", device_b: "PC-RH1", port_b: "Fa0" },
+      { device_a: "SW-RRHH", port_a: "Fa0/2", device_b: "PC-RH2", port_b: "Fa0" },
+      { device_a: "SW-DATACENTER", port_a: "Fa0/1", device_b: "SRV-WEB", port_b: "Fa0" },
+      { device_a: "SW-DATACENTER", port_a: "Fa0/2", device_b: "SRV-DNS", port_b: "Fa0" },
     ],
   },
   null,
@@ -111,11 +126,11 @@ const ESCENAS: Record<string, AgentEvent[]> = {
       costUsd: 0.2144,
       usage: { tokens: 43_500, contextWindow: 1_000_000 },
       text:
-        "Listo. Dos LAN con OSPF entre R1 y R2.\n\n" +
+        "Es una estrella clásica de dos niveles: el 3560 hace de núcleo y cada " +
+        "departamento cuelga de su propio 2960 de acceso.\n\n" +
         "## Verificación\n\n" +
-        "| Prueba | Resultado |\n|---|---|\n| PC1 → SRV1 | 4/4 |\n| PC3 → PC1 | 4/4 |\n\n" +
-        "El hardening falló: `login local` sin usuarios dejaría las VTY inservibles.\n\n" +
-        "Si querés lo arreglo creando un usuario local antes de tocar las VTY.",
+        "| Prueba | Resultado |\n|---|---|\n| PC-VEN1 → SRV-WEB | 4/4 |\n| PC-IT1 → PC-RH1 | 4/4 |\n\n" +
+        "El hardening falló: `login local` sin usuarios dejaría las VTY inservibles.",
     },
     { type: "phase", phase: "idle" },
   ],
@@ -125,10 +140,13 @@ const ancho = Number(process.env.COLS ?? 118)
 const alto = Number(process.env.ROWS ?? 32)
 
 for (const [nombre, eventos] of Object.entries(ESCENAS)) {
-  const setup = await testRender(() => App({ engine: fakeEngine(eventos), model: "opus-5" }), {
-    width: ancho,
-    height: alto,
-  })
+  // `columns` va explícito: se renderiza a un buffer, no a la terminal, así que
+  // `process.stdout.columns` mediría la ventana equivocada y el plano saldría
+  // escalado a un ancho que no es el que se está dibujando.
+  const setup = await testRender(
+    () => App({ engine: fakeEngine(eventos), model: "opus-5", columns: ancho }),
+    { width: ancho, height: alto },
+  )
   // El App consume los eventos de forma asíncrona: sin esta pausa se captura la
   // primera pintura, cuando todavía no llegó ninguno.
   await new Promise((r) => setTimeout(r, 80))

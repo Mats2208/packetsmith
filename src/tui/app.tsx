@@ -4,7 +4,7 @@ import type { Engine, Limits, Phase, Session, Usage } from "../engine/types.ts"
 import type { Topology } from "../topology/model.ts"
 import { EMPTY, ingest } from "../topology/ingest.ts"
 import { Chat, shortToolName, type Turn } from "./chat.tsx"
-import { Canvas } from "./canvas.tsx"
+import { Canvas, WIDTH as PANEL_WIDTH } from "./canvas.tsx"
 import { Prompt } from "./prompt.tsx"
 import { Activity } from "./activity.tsx"
 import { C } from "./theme.ts"
@@ -34,6 +34,31 @@ export function bridgeIsUp(output: unknown): boolean {
 /** Cada cuánto late el indicador de actividad, en milisegundos. */
 const BEAT_MS = 120
 
+/**
+ * Firma de la disposición de la red.
+ *
+ * El plano se adjunta solo al turno que la CAMBIÓ: repetirlo en cada respuesta
+ * lo volvería papel tapiz y dejaría de mirarse. La firma incluye las
+ * coordenadas porque mover un equipo en PT sin agregar ninguno también es un
+ * cambio de disposición, y es exactamente lo que el plano existe para mostrar.
+ */
+export function layoutKey(topo: Topology): string {
+  return topo.devices.map((d) => `${d.name}@${d.x},${d.y}`).join("|") + `#${topo.links.length}`
+}
+
+/**
+ * Si vale la pena dibujar el plano.
+ *
+ * Sin enlaces no hay forma que mostrar, y sin coordenadas tampoco:
+ * `pt_query_topology` devuelve todos los equipos en (0,0) y el plano saldría
+ * como una sola celda con catorce nodos encima.
+ */
+export function worthMapping(topo: Topology): boolean {
+  return topo.devices.length >= 2 &&
+    topo.links.length > 0 &&
+    topo.devices.some((d) => d.x !== 0 || d.y !== 0)
+}
+
 /** `1 TURNO`, `2 TURNOS`. Un "1 TURNOS" delata que nadie miró la pantalla. */
 export function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "S"}`
@@ -47,14 +72,30 @@ export function windowLabel(window: string): string {
   return `${n[m[1]!] ?? m[1]!}${m[2] === "hour" ? "H" : "D"}`
 }
 
-/** Chip de cuota. El color solo aparece cuando hay algo que decidir. */
-export function limitChip(l: Limits): { text: string; fg: string } {
-  const mark = l.status === "allowed" ? "✓" : l.status === "rejected" ? "✗" : "⚠"
-  const fg = l.status === "allowed" ? C.dim : l.status === "rejected" ? C.alert : C.warn
-  return { text: `${windowLabel(l.window)} ${mark}`, fg }
+/**
+ * Cuánto falta para que la ventana de cuota se reinicie.
+ *
+ * El CLI da el instante del reinicio, no el porcentaje consumido. La cuenta
+ * regresiva es lo que se puede derivar de eso y es la mitad útil del dato: con
+ * el tope cerca, saber si faltan diez minutos o tres horas decide si conviene
+ * seguir ahora o después.
+ */
+export function untilReset(resetsAt: number, now: number): string {
+  const mins = Math.round((resetsAt * 1000 - now) / 60_000)
+  if (mins <= 0) return ""
+  if (mins < 60) return `${mins}m`
+  return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}`
 }
 
-export function App(props: { engine: Engine; model?: string }) {
+/** Chip de cuota. El color solo aparece cuando hay algo que decidir. */
+export function limitChip(l: Limits, now = Date.now()): { text: string; fg: string } {
+  const mark = l.status === "allowed" ? "✓" : l.status === "rejected" ? "✗" : "⚠"
+  const fg = l.status === "allowed" ? C.dim : l.status === "rejected" ? C.alert : C.warn
+  const left = untilReset(l.resetsAt, now)
+  return { text: `${windowLabel(l.window)} ${mark}${left ? ` ${left}` : ""}`, fg }
+}
+
+export function App(props: { engine: Engine; model?: string; columns?: number }) {
   const [turns, setTurns] = createSignal<Turn[]>([])
   const [streaming, setStreaming] = createSignal("")
   const [busy, setBusy] = createSignal(false)
@@ -90,10 +131,32 @@ export function App(props: { engine: Engine; model?: string }) {
     onCleanup(() => clearInterval(id))
   })
 
+  // Reloj lento, solo para la cuenta regresiva de la cuota. Sin él el número se
+  // congela cuando la sesión queda quieta, que es justo cuando el tiempo pasa.
+  const [now, setNow] = createSignal(Date.now())
+  onMount(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000)
+    onCleanup(() => clearInterval(id))
+  })
+
   let session: Session | undefined
+  // Disposición del último plano dibujado, para no repetirlo turno tras turno.
+  let mapped = ""
   // Tools del turno en curso, como signal para que el panel las muestre
   // mientras corren en vez de recién al cerrar el turno.
   const [live, setLive] = createSignal<NonNullable<Turn["tools"]>>([])
+
+  // Ancho de la terminal. El plano tiene que entrar exacto: recortarlo le corta
+  // nodos, y esta versión de OpenTUI no expone el tamaño desde un componente.
+  // `props.columns` existe para el preview y los tests, que renderizan a un
+  // buffer de un ancho que no tiene nada que ver con el de la terminal real.
+  const [cols, setCols] = createSignal(props.columns ?? process.stdout.columns ?? 100)
+  onMount(() => {
+    if (props.columns) return
+    const onResize = () => setCols(process.stdout.columns || 100)
+    process.stdout.on("resize", onResize)
+    onCleanup(() => void process.stdout.off("resize", onResize))
+  })
 
   onMount(() => {
     session = props.engine.start({ model: props.model })
@@ -155,7 +218,18 @@ export function App(props: { engine: Engine; model?: string }) {
           setLive([])
           setCost((c) => c + ev.costUsd)
           if (ev.usage) setUsage(ev.usage)
-          setTurns((t) => [...t, { role: "agent", text: ev.text || streaming(), tools }])
+
+          const topo = topology()
+          const key = layoutKey(topo)
+          const map = worthMapping(topo) && key !== mapped ? topo : undefined
+          if (map) mapped = key
+
+          setTurns((t) => [...t, {
+            role: "agent",
+            text: ev.text || streaming(),
+            tools,
+            ...(map ? { map } : {}),
+          }])
           setStreaming("")
           setBusy(false)
           setPhase("idle")
@@ -222,6 +296,10 @@ export function App(props: { engine: Engine; model?: string }) {
           busy={busy()}
           liveTools={live()}
           live={bridgeLive()}
+          // Lo que sobra después del panel, los márgenes del chat y la canaleta
+          // del mensaje. Si sobra menos de 30 el plano no se dibuja: mejor nada
+          // que un plano con nodos cortados.
+          mapWidth={cols() - PANEL_WIDTH - 6}
         />
         <Canvas topology={topology()} lastTool={lastTool()} live={bridgeLive()} />
       </box>
@@ -246,7 +324,7 @@ export function App(props: { engine: Engine; model?: string }) {
             { text: plural(topology().devices.length, "NODO") },
             { text: `$${cost().toFixed(4)}` },
           ]}
-          tail={<Budget usage={usage()} limits={limits()} />}
+          tail={<Budget usage={usage()} limits={limits()} now={now()} />}
         />
       </box>
 
@@ -270,9 +348,9 @@ export function App(props: { engine: Engine; model?: string }) {
  * datos ya venían en el stream del CLI —`usage` y `rate_limit_event`— sin que
  * hubiera que leer el token de OAuth ni pegarle a ningún endpoint aparte.
  */
-function Budget(props: { usage?: Usage; limits?: Limits }) {
+function Budget(props: { usage?: Usage; limits?: Limits; now: number }) {
   const pct = () => (props.usage ? props.usage.tokens / props.usage.contextWindow : 0)
-  const chip = () => (props.limits ? limitChip(props.limits) : undefined)
+  const chip = () => (props.limits ? limitChip(props.limits, props.now) : undefined)
 
   return (
     <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>

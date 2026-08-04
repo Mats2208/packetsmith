@@ -1,7 +1,10 @@
 // Panel izquierdo: la conversación. Presentación pura — quien corre el motor
 // y arma los turnos es app.tsx.
 import { For, Show } from "solid-js"
+import type { Topology } from "../topology/model.ts"
+import { drawMap, type Ink } from "../topology/map.ts"
 import { C } from "./theme.ts"
+import { rule } from "./ascii.ts"
 import { GUTTER } from "./frame.tsx"
 import { Welcome } from "./welcome.tsx"
 
@@ -10,6 +13,51 @@ export interface Turn {
   text: string
   /** Tools que el agente usó en este turno, en orden. */
   tools?: { name: string; done: boolean; isError: boolean }[]
+  /**
+   * Topología a dibujar como plano bajo la respuesta.
+   *
+   * Solo va en los turnos que la CAMBIARON: repetir el mismo plano en cada
+   * respuesta lo volvería papel tapiz y dejaría de mirarse.
+   */
+  map?: Topology
+}
+
+/** Tono de cada tipo de celda del plano. */
+const INK: Record<Ink, string> = {
+  node: C.fg,
+  link: C.rule,
+  label: C.dim,
+}
+
+/**
+ * El plano de la red, con las coordenadas reales del canvas de Packet Tracer.
+ *
+ * No compite con el árbol del panel: el árbol contesta de qué cuelga cada
+ * equipo, el plano contesta cómo está armado. Un uplink que cruza de un extremo
+ * al otro del lienzo se ve acá y es invisible en el árbol.
+ */
+function MapBlock(props: { topology: Topology; width: number }) {
+  // Debajo de este ancho el plano sale con nodos cortados, y un plano cortado
+  // miente sobre la red. Mejor no dibujarlo.
+  const rows = () =>
+    props.width < 30 ? [] : drawMap(props.topology, { width: props.width, maxHeight: 15 })
+
+  return (
+    <Show when={rows().length}>
+      <box style={{ flexDirection: "column", height: rows().length + 2, marginTop: 1 }}>
+        <text style={{ fg: C.rule }}>{rule("plano · canvas de PT", props.width)}</text>
+        <For each={rows()}>
+          {(spans) => (
+            <box style={{ flexDirection: "row", height: 1 }}>
+              <For each={spans}>
+                {(s) => <text style={{ fg: INK[s.ink] }}>{s.text}</text>}
+              </For>
+            </box>
+          )}
+        </For>
+      </box>
+    </Show>
+  )
 }
 
 /** `mcp__packet-tracer__pt_full_build` → `pt_full_build`. */
@@ -196,7 +244,7 @@ function Body(props: { text: string }) {
             // Columnas de ancho fijo: una tabla desalineada es peor que ninguna.
             return (
               <text style={{ fg: C.dim }}>
-                {"  " + p.cells.map((c) => c.padEnd(16).slice(0, 16)).join(" ")}
+                {"  " + p.cells.map((c) => c.padEnd(20).slice(0, 20)).join(" ")}
               </text>
             )
           case "bullet":
@@ -244,6 +292,8 @@ export function Chat(props: {
   liveTools?: NonNullable<Turn["tools"]>
   /** Estado del puente con PT, para la pantalla de arranque. */
   live?: boolean
+  /** Ancho útil para el plano. Lo calcula quien sabe cuánto mide la terminal. */
+  mapWidth?: number
 }) {
   // La bienvenida REEMPLAZA la conversación, no la encabeza: así puede tomarse
   // el alto entero y centrarse, que es lo que la hace ver como una portada en
@@ -269,6 +319,9 @@ export function Chat(props: {
                 </Show>
                 <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>
                   <Body text={turn.text} />
+                </Show>
+                <Show when={turn.map}>
+                  <MapBlock topology={turn.map!} width={props.mapWidth ?? 76} />
                 </Show>
               </Block>
             )}

@@ -17,7 +17,7 @@ import { Plate, SPLIT } from "./frame.tsx"
 /** Columna donde arranca la IP. Fija: es lo que mantiene la grilla a plomo. */
 const IP_COL = 22
 /** Ancho del panel. Fijo a propósito: la telemetría no se reflowea. */
-const WIDTH = 42
+export const WIDTH = 42
 /** Lo que queda adentro después del filete y los márgenes. */
 const INNER = WIDTH - 3
 

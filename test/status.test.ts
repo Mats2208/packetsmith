@@ -2,7 +2,7 @@
 // Todo esto sale de eventos que el CLI ya emitía y que hasta ahora tirábamos.
 import { expect, test, describe } from "bun:test"
 import { clock, compact } from "../src/tui/activity.tsx"
-import { limitChip, plural, windowLabel } from "../src/tui/app.tsx"
+import { layoutKey, limitChip, plural, untilReset, windowLabel, worthMapping } from "../src/tui/app.tsx"
 import { readUsage, translate } from "../src/engine/claude.ts"
 import type { AgentEvent } from "../src/engine/types.ts"
 
@@ -49,6 +49,53 @@ describe("chip de cuota", () => {
     expect(chip("rejected").text).toBe("5H ✗")
     expect(chip("allowed").fg).not.toBe(chip("allowed_warning").fg)
     expect(chip("rejected").fg).not.toBe(chip("allowed_warning").fg)
+  })
+
+  test("cuenta cuánto falta para el reinicio", () => {
+    // El CLI da el instante del reinicio, no el porcentaje consumido. Con el
+    // tope cerca, saber si faltan diez minutos o tres horas decide si conviene
+    // seguir ahora o después.
+    const t0 = 1_800_000_000_000
+    expect(untilReset(t0 / 1000 + 42 * 60, t0)).toBe("42m")
+    expect(untilReset(t0 / 1000 + 134 * 60, t0)).toBe("2h14")
+    // Una ventana ya vencida no muestra un contador en cero ni negativo.
+    expect(untilReset(t0 / 1000 - 60, t0)).toBe("")
+  })
+
+  test("el chip lleva la cuenta regresiva cuando la hay", () => {
+    const t0 = 1_800_000_000_000
+    const l = { window: "five_hour", status: "allowed", resetsAt: t0 / 1000 + 90 * 60 }
+    expect(limitChip(l, t0).text).toBe("5H ✓ 1h30")
+  })
+})
+
+describe("cuándo se dibuja el plano", () => {
+  const dev = (name: string, x: number, y: number) =>
+    ({ name, model: "2911", x, y, ports: [] })
+  const link = { a: { device: "A", port: "" }, b: { device: "B", port: "" }, wireless: false }
+
+  test("hace falta enlaces Y coordenadas", () => {
+    // Sin enlaces no hay forma que mostrar; sin coordenadas tampoco:
+    // `pt_query_topology` devuelve todo en (0,0) y saldrían todos apilados en
+    // una celda.
+    expect(worthMapping({ devices: [dev("A", 10, 10), dev("B", 50, 90)], links: [link] })).toBe(true)
+    expect(worthMapping({ devices: [dev("A", 10, 10), dev("B", 50, 90)], links: [] })).toBe(false)
+    expect(worthMapping({ devices: [dev("A", 0, 0), dev("B", 0, 0)], links: [link] })).toBe(false)
+    expect(worthMapping({ devices: [dev("A", 10, 10)], links: [link] })).toBe(false)
+  })
+
+  test("mover un equipo cuenta como cambio de disposición", () => {
+    // Es exactamente lo que el plano existe para mostrar, y un contador de
+    // equipos no lo vería.
+    const antes = { devices: [dev("A", 10, 10), dev("B", 50, 90)], links: [link] }
+    const despues = { devices: [dev("A", 10, 10), dev("B", 300, 90)], links: [link] }
+    expect(layoutKey(antes)).not.toBe(layoutKey(despues))
+  })
+
+  test("la misma red da la misma firma", () => {
+    // Si no, el plano se repetiría en cada respuesta y sería papel tapiz.
+    const t = { devices: [dev("A", 10, 10), dev("B", 50, 90)], links: [link] }
+    expect(layoutKey(t)).toBe(layoutKey({ ...t }))
   })
 })
 
