@@ -1,0 +1,17 @@
+node_modules/
+bun.lockb
+dist/
+build/
+
+# Instrucciones privadas de trabajo (las públicas van en AGENTS.md)
+CLAUDE.local.md
+.claude/
+NOTES.local.md
+
+# Capturas y proyectos generados durante el desarrollo
+*.pkt
+*.png
+!docs/**/*.png
+
+.DS_Store
+*.log

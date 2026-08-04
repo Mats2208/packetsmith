@@ -1,0 +1,6 @@
+# El preload de OpenTUI transforma el JSX de Solid en tiempo de ejecución.
+# Sin esto, `bun run src/index.ts` falla al primer <box>.
+preload = ["@opentui/solid/preload"]
+
+[test]
+preload = ["@opentui/solid/preload"]
