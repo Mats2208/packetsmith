@@ -32,6 +32,8 @@ export type Piece =
   | { kind: "row"; cells: string[] }
   | { kind: "bullet"; text: string }
   | { kind: "text"; text: string }
+  /** Renglón en blanco entre párrafos. */
+  | { kind: "gap" }
 
 const FENCE = /```[^\n]*\n([\s\S]*?)```/g
 
@@ -48,10 +50,19 @@ export function parseBlocks(text: string): Piece[] {
   let last = 0
   let m: RegExpExecArray | null
 
+  /** Un solo hueco entre bloques, y nunca uno al principio. */
+  const gap = () => {
+    if (out.length && out[out.length - 1]!.kind !== "gap") out.push({ kind: "gap" })
+  }
+
   const prose = (chunk: string) => {
     for (const raw of chunk.split("\n")) {
       const line = raw.trimEnd()
-      if (!line.trim()) continue
+      // Los renglones en blanco del markdown se descartaban, así que dos
+      // párrafos distintos quedaban pegados y la respuesta se leía como un
+      // muro. El salto que puso el modelo es información: dice dónde termina
+      // una idea. Se respeta.
+      if (!line.trim()) { gap(); continue }
 
       // Separador de tabla: |---|---| no aporta nada en un panel angosto.
       if (/^\s*\|[\s\-:|]+\|\s*$/.test(line)) { out.push({ kind: "rule" }); continue }
@@ -63,7 +74,13 @@ export function parseBlocks(text: string): Piece[] {
         })
         continue
       }
-      if (/^#{1,6}\s+/.test(line)) { out.push({ kind: "head", text: stripInline(line) }); continue }
+      // Un encabezado abre sección: siempre respira arriba, lo haya separado
+      // el modelo con un renglón en blanco o no.
+      if (/^#{1,6}\s+/.test(line)) {
+        gap()
+        out.push({ kind: "head", text: stripInline(line) })
+        continue
+      }
       if (/^\s*[-*]\s+/.test(line)) {
         out.push({ kind: "bullet", text: stripInline(line.replace(/^\s*[-*]\s+/, "")) })
         continue
@@ -78,6 +95,9 @@ export function parseBlocks(text: string): Piece[] {
     last = m.index + m[0].length
   }
   if (last < text.length) prose(text.slice(last))
+
+  // Un hueco al final solo empuja el bloque siguiente sin separar nada.
+  if (out[out.length - 1]?.kind === "gap") out.pop()
   return out
 }
 
@@ -111,32 +131,45 @@ export function summarizeTools(tools: NonNullable<Turn["tools"]>): {
 }
 
 /**
- * Las tools del turno, como escalera.
+ * Las tools del turno, como badges.
  *
- * Una lista separada por comas se lee como prosa y se confunde con la respuesta;
- * los conectores `├ └` la marcan como maquinaria. El orden no es el de llamada
- * sino el de urgencia —corriendo, falladas, hechas— porque lo que importa
- * mientras se mira es qué está pasando y qué se rompió, no la cronología.
+ * Se probó antes una escalera de `├ └`, una tool por renglón: un deploy real
+ * dispara veinte llamadas y se comía la pantalla entera antes de que empezara
+ * la respuesta. Los badges entran cuatro o cinco por renglón, y el fondo
+ * hundido los separa de la prosa sin gastar un conector por línea.
+ *
+ * El orden no es el de llamada sino el de urgencia —corriendo, falladas,
+ * hechas—: mientras mirás, lo que importa es qué está pasando y qué se rompió.
  */
 function Tools(props: { tools: NonNullable<Turn["tools"]> }) {
-  const rungs = () => {
+  const badges = () => {
     const s = summarizeTools(props.tools)
     return [
-      ...s.running.map((name) => ({ name, mark: "▓", fg: C.fg })),
-      ...s.failed.map((name) => ({ name, mark: "✗", fg: C.alert })),
-      ...s.ok.map((name) => ({ name, mark: "·", fg: C.dim })),
+      ...s.running.map((name) => ({ name, mark: "▶ ", fg: C.fg })),
+      ...s.failed.map((name) => ({ name, mark: "✗ ", fg: C.alert })),
+      ...s.ok.map((name) => ({ name, mark: "", fg: C.dim })),
     ]
   }
 
   return (
-    <For each={rungs()}>
-      {(r, i) => (
-        <text style={{ fg: C.rule }}>
-          {i() === rungs().length - 1 ? "└ " : "├ "}
-          <span style={{ fg: r.fg }}>{`${r.mark} ${r.name}`}</span>
-        </text>
-      )}
-    </For>
+    <box style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 1 }}>
+      <For each={badges()}>
+        {(b) => (
+          <box
+            style={{
+              backgroundColor: C.sunken,
+              paddingLeft: 1,
+              paddingRight: 1,
+              marginRight: 1,
+              height: 1,
+              flexShrink: 0,
+            }}
+          >
+            <text style={{ fg: b.fg }}>{`${b.mark}${b.name}`}</text>
+          </box>
+        )}
+      </For>
+    </box>
   )
 }
 
@@ -153,8 +186,10 @@ function Body(props: { text: string }) {
                 <text style={{ fg: C.fg }}>{p.text}</text>
               </box>
             )
+          case "gap":
+            return <box style={{ height: 1 }} />
           case "head":
-            return <text style={{ fg: C.fg }}>{`\n── ${p.text.toUpperCase()}`}</text>
+            return <text style={{ fg: C.fg }}>{`── ${p.text.toUpperCase()}`}</text>
           case "rule":
             return <text style={{ fg: C.rule }}>{"  " + "─".repeat(28)}</text>
           case "row":

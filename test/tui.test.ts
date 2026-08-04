@@ -83,7 +83,7 @@ describe("Chat", () => {
     expect(frame).toContain("escribiendo…")
   })
 
-  test("marca las tools según su estado, como escalera", async () => {
+  test("marca las tools según su estado, como badges", async () => {
     const turns: Turn[] = [{
       role: "agent",
       text: "hecho",
@@ -100,12 +100,20 @@ describe("Chat", () => {
     expect(frame).toContain("✗ pt_add_device")
     expect(frame).toContain("pt_full_build")
     // Lo que sigue corriendo va primero: es lo único sobre lo que se puede
-    // esperar algo. Los conectores marcan el bloque como maquinaria, no prosa.
-    const rows = frame.split("\n")
-    expect(rows.findIndex((l) => l.includes("pt_screenshot")))
-      .toBeLessThan(rows.findIndex((l) => l.includes("pt_full_build")))
-    expect(frame).toContain("├ ")
-    expect(frame).toContain("└ ")
+    // esperar algo. Lo que falló, segundo. Lo que salió bien no urge.
+    expect(frame.indexOf("pt_screenshot")).toBeLessThan(frame.indexOf("pt_add_device"))
+    expect(frame.indexOf("pt_add_device")).toBeLessThan(frame.indexOf("pt_full_build"))
+  })
+
+  test("los badges entran varios por renglón", async () => {
+    // Con una tool por línea, un deploy real de veinte llamadas se comía la
+    // pantalla entera antes de que empezara la respuesta.
+    const tools = ["a", "b", "c", "d"].map((n) => ({
+      name: `mcp__packet-tracer__pt_${n}`, done: true, isError: false,
+    }))
+    const frame = await frameOf(() => Chat({ turns: [{ role: "agent", text: "ok", tools }], streaming: "", busy: false }))
+    const row = frame.split("\n").find((l) => l.includes("pt_a"))!
+    expect(row).toContain("pt_b")
   })
 })
 
@@ -215,6 +223,36 @@ describe("markdown selectivo", () => {
     expect(frame).toContain("Prueba")
     expect(frame).toContain("4/4")
     expect(frame).not.toContain("|---|")
+  })
+
+  test("dos párrafos no quedan pegados", async () => {
+    // Los renglones en blanco del markdown se descartaban, así que oraciones
+    // sueltas se leían como un muro. El salto que puso el modelo es
+    // información: dice dónde termina una idea.
+    const turns: Turn[] = [{ role: "agent", text: "Primera idea.\n\nSegunda idea." }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
+    const rows = frame.split("\n")
+    const a = rows.findIndex((l) => l.includes("Primera"))
+    const b = rows.findIndex((l) => l.includes("Segunda"))
+    expect(b - a).toBe(2)
+  })
+
+  test("los renglones de una misma oración siguen juntos", async () => {
+    // El salto simple dentro de un párrafo no separa ideas: si también abriera
+    // hueco, una respuesta normal quedaría al doble de alto sin ganar nada.
+    const turns: Turn[] = [{ role: "agent", text: "Una línea.\nLa de al lado." }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
+    const rows = frame.split("\n")
+    expect(rows.findIndex((l) => l.includes("al lado")) -
+      rows.findIndex((l) => l.includes("Una línea"))).toBe(1)
+  })
+
+  test("un encabezado siempre respira arriba", async () => {
+    const turns: Turn[] = [{ role: "agent", text: "Texto.\n## Sección\nmás texto" }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
+    const rows = frame.split("\n")
+    expect(rows.findIndex((l) => l.includes("SECCIÓN")) -
+      rows.findIndex((l) => l.includes("Texto."))).toBe(2)
   })
 
   test("el bold y el código inline pierden el marcado, no el texto", async () => {
