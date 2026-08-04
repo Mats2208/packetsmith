@@ -23,6 +23,10 @@ export const C = {
   rule: "#2A2A2A",
   /** Acento único. Errores y solo errores. */
   alert: "#E61919",
+  /** Ámbar de aviso. UN solo uso: la cuota cerca del tope. Es el único estado
+   *  que no es ni normal ni error, y confundirlo con cualquiera de los dos
+   *  costaría un turno cortado a la mitad. */
+  warn: "#D97706",
   /** Fósforo verde. EXCLUSIVO del estado del enlace con PT. */
   live: "#4AF626",
   /** Quien habla: el operador. */

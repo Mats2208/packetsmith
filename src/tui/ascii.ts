@@ -102,25 +102,6 @@ export function bar(fraction: number, width = 10): string {
   return "█".repeat(filled) + "░".repeat(width - filled)
 }
 
-const BARCODE = "▏▎▍▌▋"
-
-/**
- * Textura de código de barras para rellenar lo que sobra de una fila.
- *
- * Es determinista a propósito —una tabla de bits, no `Math.random`— así el
- * patrón no titila en cada re-render y los tests pueden afirmar qué sale.
- */
-export function barcode(width: number): string {
-  let out = ""
-  for (let i = 0; i < width; i++) {
-    // Knuth: multiplicar por la razón áurea de 32 bits mezcla bits vecinos, que
-    // es justo lo que hace falta para que índices seguidos no se parezcan.
-    const h = Math.imul(i + 1, 2654435761) >>> 0
-    out += (h >>> 9) % 3 === 0 ? " " : BARCODE[(h >>> 4) % BARCODE.length]
-  }
-  return out
-}
-
 const DENSITY = "█▓▒░"
 
 /**

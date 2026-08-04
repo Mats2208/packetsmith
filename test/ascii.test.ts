@@ -2,7 +2,7 @@
 // microsegundos y atrapa lo que en pantalla se ve como un dibujo roto y en el
 // código no se ve como nada.
 import { expect, test, describe } from "bun:test"
-import { bar, barcode, rule, sweep, wordmark, WORDMARK, CHAIN, SCHEMATIC } from "../src/tui/ascii.ts"
+import { bar, rule, sweep, wordmark, WORDMARK, CHAIN, SCHEMATIC } from "../src/tui/ascii.ts"
 
 describe("wordmark", () => {
   test("las tres filas del arte más una de reflejo", () => {
@@ -61,12 +61,6 @@ describe("texturas", () => {
     for (let i = 1; i < heads.length; i++) {
       expect(Math.abs(heads[i]! - heads[i - 1]!)).toBe(1)
     }
-  })
-
-  test("el código de barras es determinista", () => {
-    // Si cambiara entre renders, la barra titilaría en cada tecla.
-    expect(barcode(40)).toBe(barcode(40))
-    expect(barcode(40)).toHaveLength(40)
   })
 
   test("la barra llena en proporción y nunca se pasa", () => {

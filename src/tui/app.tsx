@@ -1,12 +1,14 @@
 // Composición y estado. Acá vive el ciclo: input → sesión → eventos → UI.
-import { createSignal, onCleanup, onMount } from "solid-js"
-import type { Engine, Session } from "../engine/types.ts"
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
+import type { Engine, Limits, Phase, Session, Usage } from "../engine/types.ts"
 import type { Topology } from "../topology/model.ts"
 import { EMPTY, ingest } from "../topology/ingest.ts"
 import { Chat, shortToolName, type Turn } from "./chat.tsx"
 import { Canvas } from "./canvas.tsx"
+import { Prompt } from "./prompt.tsx"
+import { Activity } from "./activity.tsx"
 import { C } from "./theme.ts"
-import { sweep } from "./ascii.ts"
+import { bar } from "./ascii.ts"
 import { Hairline, Hud } from "./frame.tsx"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
@@ -29,22 +31,64 @@ export function bridgeIsUp(output: unknown): boolean {
   return !/no est[áa] conectado|not connected/i.test(text)
 }
 
+/** Cada cuánto late el indicador de actividad, en milisegundos. */
+const BEAT_MS = 120
+
+/** `1 TURNO`, `2 TURNOS`. Un "1 TURNOS" delata que nadie miró la pantalla. */
+export function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "S"}`
+}
+
+/** `five_hour` → `5H`. La etiqueta larga no entra y no aporta. */
+export function windowLabel(window: string): string {
+  const m = /^(\w+?)_(hour|day)$/.exec(window)
+  if (!m) return window.toUpperCase()
+  const n: Record<string, string> = { one: "1", five: "5", seven: "7" }
+  return `${n[m[1]!] ?? m[1]!}${m[2] === "hour" ? "H" : "D"}`
+}
+
+/** Chip de cuota. El color solo aparece cuando hay algo que decidir. */
+export function limitChip(l: Limits): { text: string; fg: string } {
+  const mark = l.status === "allowed" ? "✓" : l.status === "rejected" ? "✗" : "⚠"
+  const fg = l.status === "allowed" ? C.dim : l.status === "rejected" ? C.alert : C.warn
+  return { text: `${windowLabel(l.window)} ${mark}`, fg }
+}
+
 export function App(props: { engine: Engine; model?: string }) {
   const [turns, setTurns] = createSignal<Turn[]>([])
   const [streaming, setStreaming] = createSignal("")
   const [busy, setBusy] = createSignal(false)
   const [topology, setTopology] = createSignal<Topology>(EMPTY)
   const [lastTool, setLastTool] = createSignal<string>()
-  const [draft, setDraft] = createSignal("")
   const [model, setModel] = createSignal(props.model ?? "…")
   const [cost, setCost] = createSignal(0)
   const [toolCount, setToolCount] = createSignal(0)
   // Enlace con Packet Tracer: se deduce de si la ultima pt_* respondio bien.
   // Es el unico dato binario que importa de un vistazo, y el unico verde.
   const [bridgeLive, setBridgeLive] = createSignal(false)
-  // Avanza con cada evento del stream: da un spinner sin timers ni intervalos,
-  // y de paso late al ritmo REAL del agente en vez de a un ritmo inventado.
-  const [tick, setTick] = createSignal(0)
+
+  // Qué está haciendo el agente. Lo dice el CLI; no se deduce del silencio.
+  const [phase, setPhase] = createSignal<Phase>("idle")
+  const [phaseDetail, setPhaseDetail] = createSignal<string>()
+  const [thinking, setThinking] = createSignal(0)
+  const [usage, setUsage] = createSignal<Usage>()
+  const [limits, setLimits] = createSignal<Limits>()
+
+  // El latido va con reloj, no con los eventos. Suena a detalle y no lo es: el
+  // tramo que hay que cubrir es el SILENCIOSO —pedido en vuelo, razonamiento
+  // sin texto—, y ahí no llega ningún evento que pueda mover un contador.
+  const [beat, setBeat] = createSignal(0)
+  const [startedAt, setStartedAt] = createSignal(0)
+  const [elapsed, setElapsed] = createSignal(0)
+
+  createEffect(() => {
+    if (phase() === "idle") return
+    const id = setInterval(() => {
+      setBeat((b) => b + 1)
+      setElapsed(Date.now() - startedAt())
+    }, BEAT_MS)
+    onCleanup(() => clearInterval(id))
+  })
 
   let session: Session | undefined
   // Tools del turno en curso, como signal para que el panel las muestre
@@ -59,11 +103,27 @@ export function App(props: { engine: Engine; model?: string }) {
 
   async function consume(s: Session) {
     for await (const ev of s.events()) {
-      setTick((n) => n + 1)
       switch (ev.type) {
         case "ready":
           setModel(ev.model)
           setToolCount(ev.tools.length)
+          break
+
+        case "phase":
+          setPhase(ev.phase)
+          setPhaseDetail(ev.detail ? shortToolName(ev.detail) : undefined)
+          // Los tokens de razonamiento son POR TRAMO: si no se reiniciaran, el
+          // segundo bloque de thinking arrancaría desde donde quedó el primero
+          // y el contador diría cualquier cosa.
+          if (ev.phase === "thinking") setThinking(0)
+          break
+
+        case "thinking":
+          setThinking(ev.tokens)
+          break
+
+        case "limits":
+          setLimits(ev.limits)
           break
 
         case "text":
@@ -94,9 +154,11 @@ export function App(props: { engine: Engine; model?: string }) {
           const tools = live()
           setLive([])
           setCost((c) => c + ev.costUsd)
+          if (ev.usage) setUsage(ev.usage)
           setTurns((t) => [...t, { role: "agent", text: ev.text || streaming(), tools }])
           setStreaming("")
           setBusy(false)
+          setPhase("idle")
           break
         }
 
@@ -105,21 +167,22 @@ export function App(props: { engine: Engine; model?: string }) {
           setLive([])
           setStreaming("")
           setBusy(false)
+          setPhase("idle")
           break
       }
     }
   }
 
-  function submit() {
-    const text = draft().trim()
-    if (!text || busy() || !session) return
-
+  function submit(text: string) {
+    if (!session) return
     setTurns((t) => [...t, { role: "user", text }])
     setBusy(true)
     setStreaming("")
-    // Limpiar el borrador ANTES de mandar: en v0.1 el input quedaba con el
-    // texto anterior y no se podía escribir un segundo mensaje.
-    setDraft("")
+    // El reloj arranca acá y no al primer evento: lo que se quiere medir es
+    // cuánto llevás esperando vos, que empieza al apretar Enter.
+    setStartedAt(Date.now())
+    setElapsed(0)
+    setPhase("requesting")
     session.send(text)
   }
 
@@ -142,7 +205,7 @@ export function App(props: { engine: Engine; model?: string }) {
             { text: model().toUpperCase().replace(/^CLAUDE-/, "") },
             { text: `${toolCount()} TOOLS` },
           ]}
-          tail={{ text: `REV ${REV}` }}
+          tail={<text style={{ fg: C.dim }}>{`REV ${REV}`}</text>}
         />
       </box>
       <Hairline />
@@ -156,35 +219,67 @@ export function App(props: { engine: Engine; model?: string }) {
       </box>
 
       <Hairline />
-      {/* La cuña `▌` marca dónde escribís, y se enciende solo cuando el turno es
-          tuyo: mientras el agente trabaja no hay nada que escribir. */}
-      <box style={{ flexDirection: "row", height: 1, paddingLeft: 1, paddingRight: 1 }}>
-        <text style={{ fg: busy() ? C.rule : C.fg, flexShrink: 0 }}>{"▌ "}</text>
-        <input
-          focused
-          value={draft()}
-          placeholder={busy() ? "el agente está trabajando…" : "describí la red que querés"}
-          onInput={setDraft}
-          onSubmit={submit}
+      {/* Barra de estado ARRIBA del campo de escritura: lo que informa va junto
+          a la conversación, y el campo queda último, que es donde está el
+          cursor y donde el ojo vuelve solo después de leer. */}
+      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+        <Hud
+          lead={
+            <Activity
+              phase={phase()}
+              detail={phaseDetail()}
+              thinking={thinking()}
+              elapsedMs={elapsed()}
+              beat={beat()}
+            />
+          }
+          segments={[
+            { text: plural(turns().length, "TURNO") },
+            { text: plural(topology().devices.length, "NODO") },
+            { text: `$${cost().toFixed(4)}` },
+          ]}
+          tail={<Budget usage={usage()} limits={limits()} />}
         />
       </box>
 
-      {/* Barra de estado: lo que cambia en vivo va acá abajo, lejos del texto,
-          para que el ojo no tenga que competir con la conversación. El barrido
-          de la derecha reemplaza al spinner — ocupa el ancho del aparato en vez
-          de un carácter, que es la diferencia entre "algo pasa" y telemetría. */}
-      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
-        <Hud
-          segments={[
-            { text: `${turns().length} TURNS` },
-            { text: `${topology().devices.length} NODES` },
-            { text: `${topology().links.length} LINKS` },
-            { text: `$${cost().toFixed(4)}` },
-          ]}
-          tail={busy() ? { text: sweep(14, tick()), fg: C.fg } : { text: "IDLE", fg: C.rule }}
-          phase={37}
-        />
-      </box>
+      {/* El atajo va en el placeholder y no en una leyenda fija: se ve justo
+          cuando hace falta —el campo vacío— y desaparece al escribir la primera
+          letra, sin quedarse ocupando un renglón para siempre. */}
+      <Prompt
+        busy={busy()}
+        placeholder={
+          busy() ? "el agente está trabajando…" : "describí la red que querés   ⏎ enviar · ⇧⏎ nueva línea"
+        }
+        onSubmit={submit}
+      />
+    </box>
+  )
+}
+
+/**
+ * Cuánto te queda: contexto ocupado y cuota del plan.
+ *
+ * Son la misma pregunta hecha a dos plazos, y en una sesión larga con varios
+ * deploys son lo que decide si conviene seguir acá o arrancar de nuevo. Los dos
+ * datos ya venían en el stream del CLI —`usage` y `rate_limit_event`— sin que
+ * hubiera que leer el token de OAuth ni pegarle a ningún endpoint aparte.
+ */
+function Budget(props: { usage?: Usage; limits?: Limits }) {
+  const pct = () => (props.usage ? props.usage.tokens / props.usage.contextWindow : 0)
+  const chip = () => (props.limits ? limitChip(props.limits) : undefined)
+
+  return (
+    <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>
+      <Show when={props.usage}>
+        <text style={{ fg: C.rule }}>
+          {"CTX "}
+          {bar(pct(), 8)}
+          <span style={{ fg: C.dim }}>{` ${Math.round(pct() * 100)}%`}</span>
+        </text>
+      </Show>
+      <Show when={chip()}>
+        <text style={{ fg: chip()!.fg }}>{`   ${chip()!.text}`}</text>
+      </Show>
     </box>
   )
 }

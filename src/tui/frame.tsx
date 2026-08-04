@@ -7,11 +7,10 @@
 // La idea de fondo: el marco no se dibuja, se DEDUCE del contraste. Una regla
 // de una celda separa mejor que una caja completa, y un fondo apenas distinto
 // separa mejor que las dos cosas juntas.
-import { For, Show } from "solid-js"
+import { For, Show, type JSX } from "solid-js"
 import type { BorderCharacters } from "@opentui/core"
 import { C } from "./theme.ts"
 import type { Run, Tone } from "./ascii.ts"
-import { barcode } from "./ascii.ts"
 
 /** Cada tono del arte, resuelto a color. El arte no sabe de colores. */
 export const TONE: Record<Tone, string> = {
@@ -100,47 +99,42 @@ export function Plate(props: { lines: readonly string[]; fg?: string; marginTop?
   )
 }
 
-/** Bastante código de barras como para desbordar cualquier terminal. */
-const FILLER = barcode(400)
-
 /**
- * Una fila de instrumentos: segmentos separados por `▏`, el sobrante relleno con
- * textura de código de barras, y una cola pegada al borde derecho.
+ * Una fila de instrumentos: segmentos a la izquierda, cola pegada a la derecha.
  *
- * El relleno no es decoración gratuita: sin él la fila termina a mitad de camino
- * y deja de leerse como un instrumento que ocupa todo el ancho.
+ * El sobrante va VACÍO. Antes llevaba una textura de código de barras a todo lo
+ * ancho y quedaba ruidosa: esa textura no informaba nada, y la regla que sigue
+ * este sistema es que el adorno que no dice nada se va. Lo que separa las zonas
+ * es el filete y el fondo, no el relleno.
  *
- * Nadie acá sabe cuánto mide la terminal, y no hace falta: el relleno va en una
- * caja `flexGrow` que RECORTA lo que sobra. Medir el ancho obligaría a un hook
- * de renderer que esta versión de OpenTUI no expone, y a rehacer la cuenta en
- * cada resize. Los segmentos fijos llevan `flexShrink: 0` porque si no el
- * relleno se los come a ellos primero.
+ * Nadie acá sabe cuánto mide la terminal, y no hace falta: el hueco es una caja
+ * `flexGrow` que empuja la cola. Medirlo obligaría a un hook de renderer que
+ * esta versión de OpenTUI no expone, y a rehacer la cuenta en cada resize. Los
+ * segmentos fijos llevan `flexShrink: 0` porque si no el hueco se los come.
  */
 export function Hud(props: {
   segments: { text: string; fg?: string }[]
-  tail?: { text: string; fg?: string }
-  /** Corre el patrón del relleno. Dos HUD con el MISMO código de barras leen
-   *  como un error de dibujo; corridos, como dos instrumentos distintos. */
-  phase?: number
+  /** Se dibuja a la izquierda de todo, sin separador. Para el indicador de
+   *  actividad, que tiene que estar donde el ojo cae primero. */
+  lead?: JSX.Element
+  /** Pegado al borde derecho. */
+  tail?: JSX.Element
 }) {
   return (
     <box style={{ flexDirection: "row", height: 1 }}>
+      <Show when={props.lead}>{props.lead}</Show>
       <For each={props.segments}>
         {(s, i) => (
           <>
-            <Show when={i() > 0}>
-              <text style={{ fg: C.rule, flexShrink: 0 }}>{" ▏ "}</text>
+            <Show when={i() > 0 || props.lead}>
+              <text style={{ fg: C.rule, flexShrink: 0 }}>{"  ·  "}</text>
             </Show>
             <text style={{ fg: s.fg ?? C.dim, flexShrink: 0 }}>{s.text}</text>
           </>
         )}
       </For>
-      <box style={{ flexGrow: 1, paddingLeft: 1, paddingRight: 1 }}>
-        <text style={{ fg: C.rule }}>{FILLER.slice(props.phase ?? 0)}</text>
-      </box>
-      <Show when={props.tail}>
-        <text style={{ fg: props.tail!.fg ?? C.dim, flexShrink: 0 }}>{props.tail!.text}</text>
-      </Show>
+      <box style={{ flexGrow: 1 }} />
+      <Show when={props.tail}>{props.tail}</Show>
     </box>
   )
 }
