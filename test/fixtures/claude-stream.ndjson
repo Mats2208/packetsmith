@@ -1,4 +1,4 @@
-{"type":"system","subtype":"init","session_id":"sess-abc","tools":["mcp__packet-tracer__pt_list_templates"]}
+{"type":"system","subtype":"init","session_id":"sess-abc","model":"claude-sonnet-5","tools":["mcp__packet-tracer__pt_export_topology"]}
 Actualización disponible: claude 2.1.0 → 2.2.0
 {"type":"stream_event","event":{"type":"message_start","message":{"id":"msg_1"}}}
 {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Voy a "}}}

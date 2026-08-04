@@ -1,9 +1,6 @@
 // El fixture reproduce los formatos verificados contra Claude Code real
 // (2026-08), incluida una línea de banner no-JSON en el medio: los CLIs
 // mezclan avisos con su salida estructurada y el parser tiene que sobrevivir.
-// El fixture reproduce los formatos verificados contra Claude Code real
-// (2026-08), incluida una línea de banner no-JSON en el medio: los CLIs
-// mezclan avisos con su salida estructurada y el parser tiene que sobrevivir.
 import { expect, test, describe } from "bun:test"
 import { jsonLines } from "../src/engine/stream.ts"
 import { buildArgs, translate } from "../src/engine/claude.ts"
@@ -16,30 +13,41 @@ function streamOf(text: string): ReadableStream<Uint8Array> {
 }
 
 describe("buildArgs", () => {
-  test("una lista vacía de tools manda \"\", no un flag pelado", () => {
-    // `--allowedTools` sin valor hace que el CLI aborte con "argument missing".
-    // Pasó de verdad en el primer smoke test contra claude real.
-    const args = buildArgs({ prompt: "x", allowedTools: [] })
-    const i = args.indexOf("--allowedTools")
-    expect(i).toBeGreaterThan(-1)
-    expect(args[i + 1]).toBe("")
+  test("abre la sesión en modo bidireccional", () => {
+    // Sin --input-format stream-json no hay conversación: habría que relanzar
+    // el proceso por cada mensaje, que es lo que hacía v0.1.
+    const args = buildArgs({})
+    expect(args[args.indexOf("--input-format") + 1]).toBe("stream-json")
+    expect(args[args.indexOf("--output-format") + 1]).toBe("stream-json")
   })
 
-  test("sin allowedTools no aparece el flag", () => {
-    expect(buildArgs({ prompt: "x" })).not.toContain("--allowedTools")
+  test("resuelve los permisos sin humano en el medio", () => {
+    // En sesión no interactiva nadie puede aprobar una tool: sin esto TODAS
+    // fallaban con "permissions not granted" y el panel nunca recibía datos.
+    const args = buildArgs({})
+    expect(args[args.indexOf("--permission-mode") + 1]).toBe("bypassPermissions")
   })
 
-  test("pide streaming y los deltas parciales", () => {
-    const args = buildArgs({ prompt: "x" })
-    expect(args).toContain("stream-json")
+  test("pide los deltas parciales", () => {
+    const args = buildArgs({})
     // Sin --verbose, stream-json no emite los stream_event y no hay deltas.
     expect(args).toContain("--verbose")
     expect(args).toContain("--include-partial-messages")
   })
 
-  test("resume una sesión previa cuando se le pasa", () => {
-    const args = buildArgs({ prompt: "x", sessionId: "sess-1" })
-    expect(args[args.indexOf("--resume") + 1]).toBe("sess-1")
+  test("una lista vacía de tools manda \"\", no un flag pelado", () => {
+    // `--allowedTools` sin valor hace que el CLI aborte con "argument missing".
+    // Pasó de verdad en el primer smoke test contra claude real.
+    const args = buildArgs({ allowedTools: [] })
+    expect(args[args.indexOf("--allowedTools") + 1]).toBe("")
+  })
+
+  test("sin allowedTools no aparece el flag", () => {
+    expect(buildArgs({})).not.toContain("--allowedTools")
+  })
+
+  test("pasa el modelo cuando se elige", () => {
+    expect(buildArgs({ model: "opus" })[buildArgs({ model: "opus" }).indexOf("--model") + 1]).toBe("opus")
   })
 })
 
@@ -53,6 +61,12 @@ describe("translate", () => {
     }
     return out
   }
+
+  test("el init informa sesión, modelo y cuántas tools hay", async () => {
+    const ready = (await eventsFromFixture()).find((e) => e.type === "ready")
+    expect(ready).toMatchObject({ sessionId: "sess-abc", model: "claude-sonnet-5" })
+    expect((ready as any).tools).toHaveLength(1)
+  })
 
   test("los text_delta salen en orden y se pueden reensamblar", async () => {
     const text = (await eventsFromFixture())
@@ -80,23 +94,21 @@ describe("translate", () => {
     expect(ends[1]).toMatchObject({ name: "mcp__packet-tracer__pt_add_device", isError: true })
   })
 
-  test("done trae sesión y costo para poder continuar el turno", async () => {
-    const done = (await eventsFromFixture()).find((e) => e.type === "done")
-    expect(done).toMatchObject({ sessionId: "sess-abc", costUsd: 0.0123 })
+  test("turn_end cierra el turno, no la sesión", async () => {
+    const end = (await eventsFromFixture()).find((e) => e.type === "turn_end")
+    expect(end).toMatchObject({ costUsd: 0.0123 })
   })
 
   test("un tool_result huérfano no rompe: queda como unknown", async () => {
-    // Puede pasar si el stream arranca a mitad de un turno reanudado.
     const raw = {
       type: "user",
       message: { content: [{ type: "tool_result", tool_use_id: "nunca-visto", content: "x" }] },
     }
-    const got = [...translate(raw, new Map())]
-    expect(got[0]).toMatchObject({ name: "unknown", id: "nunca-visto" })
+    expect([...translate(raw, new Map())][0]).toMatchObject({ name: "unknown" })
   })
 
-  test("ignora los tipos de evento que no le interesan", async () => {
-    for (const t of ["system", "rate_limit_event", "message_stop"]) {
+  test("ignora los tipos de evento que no le interesan", () => {
+    for (const t of ["rate_limit_event", "message_stop"]) {
       expect([...translate({ type: t }, new Map())]).toHaveLength(0)
     }
   })

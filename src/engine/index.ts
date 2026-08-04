@@ -16,4 +16,4 @@ export function getEngine(name: string): Engine {
   return e
 }
 
-export type { AgentEvent, Engine, RunOpts } from "./types.ts"
+export type { AgentEvent, Engine, Session, StartOpts } from "./types.ts"

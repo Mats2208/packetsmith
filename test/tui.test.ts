@@ -25,15 +25,31 @@ describe("shortToolName", () => {
 })
 
 describe("Chat", () => {
-  test("distingue el turno del usuario del agente", async () => {
+  test("etiqueta explícitamente quién dijo cada cosa", async () => {
+    // Con solo un color y un símbolo no se distinguía de un vistazo de quién
+    // era cada mensaje; fue lo primero que se notó usando la app.
     const turns: Turn[] = [
       { role: "user", text: "crea 3 routers" },
       { role: "agent", text: "listo" },
     ]
     const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
 
-    expect(frame).toContain("› crea 3 routers")
+    expect(frame).toContain("VOS")
+    expect(frame).toContain("AGENTE")
+    expect(frame).toContain("crea 3 routers")
     expect(frame).toContain("listo")
+  })
+
+  test("los bloques de código se despegan de la prosa", async () => {
+    const turns: Turn[] = [{
+      role: "agent",
+      text: "Pegá esto:\n```\nenable\nconfigure terminal\n```\nY listo.",
+    }]
+    const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }), 70, 16)
+
+    expect(frame).toContain("configure terminal")
+    // Los ``` no se muestran crudos: se convierten en un bloque con fondo.
+    expect(frame).not.toContain("```")
   })
 
   test("muestra el texto que está llegando antes de cerrar el turno", async () => {
