@@ -86,6 +86,34 @@ Two that are useful rather than hostile: a `flexGrow` box **clips** its overflow
 which gives width-independent fillers without measuring the terminal; and `border: ["left"]`
 with `customBorderChars` gives a single rule instead of a box.
 
+### Input, specifically
+
+| Trap | What you see | The rule |
+|---|---|---|
+| `virtualLineCount` read inside `onContentChange` | always the previous value — the box never grows | count wrapped rows yourself (`visualRows`); the renderable updates one frame later |
+| Keybinding without a modifier listed before one with it | `Shift+Enter` submits instead of inserting a newline | first match wins — put the *specific* binding first |
+| Relying on `Shift+Enter` alone | works in your terminal, submits half a message in the user's | without the kitty keyboard protocol the modifier never arrives; always bind `Alt+Enter` and `Ctrl+J` too |
+
+`testRender` gives you `mockInput.typeText` / `pressKey` / `pressEnter`, and
+`{ kittyKeyboard: true }` to exercise modifier-aware bindings. Input behaviour is testable —
+test it, because every trap above was found that way and none of them is visible to `tsc`.
+
+## What the CLI already tells you
+
+Claude Code's `stream-json` carries far more than text and tool calls. These were all being
+thrown away, and each one replaced something we would otherwise have had to fake:
+
+| Event | Carries | Used for |
+|---|---|---|
+| `system` / `status` | `requesting` | the only stretch with no other signal — request in flight |
+| `stream_event` / `content_block_start` | `thinking` \| `text` \| `tool_use` | what the agent is doing right now |
+| `system` / `thinking_tokens` | `estimated_tokens` | proof of life while there is no text yet |
+| `rate_limit_event` | window, status, reset time | plan quota, with **no** OAuth token read and no extra endpoint |
+| `result` / `usage` + `modelUsage` | token counts, `contextWindow` | context gauge |
+
+Before adding a mechanism, check whether the stream already reports it. Dump a real run with
+`claude -p --output-format stream-json --include-partial-messages --verbose` and look.
+
 ## Conventions
 
 - **Code comments in Spanish. Public docs (README, AGENTS.md, issues) in English.**
