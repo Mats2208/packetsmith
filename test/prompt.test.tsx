@@ -21,9 +21,15 @@ async function promptWith(
   return setup
 }
 
-/** Renglones del cuadro que tienen texto. El campo arranca en la fila 0. */
+/**
+ * Renglones con TEXTO escrito.
+ *
+ * Se descarta la cuña `█` del borde izquierdo: corre por todo el alto de la
+ * caja, incluidas las filas de aire de arriba y abajo, así que contar
+ * "renglones no vacíos" contaba también el marco.
+ */
 function usedRows(frame: string): number {
-  return frame.split("\n").filter((l) => l.trim()).length
+  return frame.split("\n").filter((l) => l.replace(/[█\s]/g, "")).length
 }
 
 describe("visualRows", () => {

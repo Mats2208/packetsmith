@@ -11,6 +11,7 @@
 import { createSignal } from "solid-js"
 import type { TextareaRenderable } from "@opentui/core"
 import { C } from "./theme.ts"
+import { EDGE } from "./frame.tsx"
 
 /** Hasta acá crece. Más que esto le come el alto a la conversación. */
 export const MAX_ROWS = 3
@@ -96,11 +97,26 @@ export function Prompt(props: {
   }
 
   return (
-    <box style={{ flexDirection: "row", paddingLeft: 1, paddingRight: 1, height: rows() }}>
-      {/* La cuña marca dónde escribís y se apaga mientras el agente trabaja:
-          en ese rato no hay nada que mandar. */}
-      <text style={{ fg: props.busy ? C.rule : C.fg, flexShrink: 0 }}>{"▌ "}</text>
-      <box style={{ flexGrow: 1, height: rows() }}>
+    // El campo tiene cuerpo: fondo propio, aire arriba y abajo, y una cuña de
+    // color a la izquierda. Antes era una línea suelta pegada al borde inferior
+    // y no se leía como "acá se escribe" sino como una fila más de estado.
+    //
+    // La cuña se apaga mientras el agente trabaja: en ese rato no hay nada que
+    // mandar, y que el color desaparezca lo dice sin una palabra.
+    <box
+      style={{
+        flexDirection: "row",
+        height: rows() + 2,
+        paddingTop: 1,
+        paddingBottom: 1,
+        paddingRight: 2,
+        backgroundColor: C.sunken,
+        border: ["left"],
+        customBorderChars: EDGE,
+        borderColor: props.busy ? C.rule : C.brand,
+      }}
+    >
+      <box style={{ flexGrow: 1, height: rows(), marginLeft: 1 }}>
         <textarea
           ref={(r: TextareaRenderable) => (area = r)}
           focused
@@ -109,10 +125,10 @@ export function Prompt(props: {
           placeholder={props.placeholder}
           placeholderColor={C.rule}
           textColor={C.fg}
-          backgroundColor={C.bg}
-          focusedBackgroundColor={C.bg}
+          backgroundColor={C.sunken}
+          focusedBackgroundColor={C.sunken}
           focusedTextColor={C.fg}
-          cursorColor={C.fg}
+          cursorColor={C.brand}
           onContentChange={measure}
           onSubmit={submit}
         />

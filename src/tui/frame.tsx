@@ -36,6 +36,8 @@ const NO_CHARS: BorderCharacters = {
 export const SPLIT = { ...NO_CHARS, vertical: "┃" }
 /** Canaleta fina: marca de quién es un mensaje, a lo largo de todo el bloque. */
 export const GUTTER = { ...NO_CHARS, vertical: "▌" }
+/** Cuña maciza: el borde de color del campo de escritura. */
+export const EDGE = { ...NO_CHARS, vertical: "█" }
 /** Regla horizontal a lo ancho del contenedor, sin tener que saber el ancho. */
 export const HAIRLINE = { ...NO_CHARS, horizontal: "─" }
 
