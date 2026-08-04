@@ -12,7 +12,15 @@ export interface Turn {
   role: "user" | "agent"
   text: string
   /** Tools que el agente usó en este turno, en orden. */
-  tools?: { name: string; done: boolean; isError: boolean }[]
+  tools?: { name: string; done: boolean; isError: boolean; id?: string; ms?: number }[]
+  /**
+   * A dónde se fue el tiempo del turno.
+   *
+   * Existe porque "esto va lento" no se puede contestar mirando: en una app que
+   * habla con un modelo Y con Packet Tracer por HTTP, la espera puede estar en
+   * cualquiera de los dos y la respuesta cambia por completo qué hay que hacer.
+   */
+  timing?: { totalMs: number; toolMs: number }
   /**
    * Topología a dibujar como plano bajo la respuesta.
    *
@@ -259,12 +267,19 @@ export function summarizeTools(tools: NonNullable<Turn["tools"]>): {
   running: string[]
 } {
   const tally = (list: typeof tools) => {
-    const counts = new Map<string, number>()
+    const counts = new Map<string, { n: number; ms: number }>()
     for (const t of list) {
-      const n = shortToolName(t.name)
-      counts.set(n, (counts.get(n) ?? 0) + 1)
+      const name = shortToolName(t.name)
+      const acc = counts.get(name) ?? { n: 0, ms: 0 }
+      counts.set(name, { n: acc.n + 1, ms: acc.ms + (t.ms ?? 0) })
     }
-    return [...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n))
+    return [...counts].map(([name, { n, ms }]) => {
+      const veces = n > 1 ? ` ×${n}` : ""
+      // El tiempo va SOLO si es notorio. Una tool de 200 ms no explica nada y
+      // ponerle número a cada una convierte la fila de badges en un log.
+      const tiempo = ms >= 1500 ? `  ${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s` : ""
+      return `${name}${veces}${tiempo}`
+    })
   }
 
   return {
@@ -272,6 +287,22 @@ export function summarizeTools(tools: NonNullable<Turn["tools"]>): {
     failed: tally(tools.filter((t) => t.done && t.isError)),
     running: tally(tools.filter((t) => !t.done)),
   }
+}
+
+/**
+ * Una línea que dice a dónde se fue el tiempo del turno.
+ *
+ * El reparto entre "esperando a Packet Tracer" y "el modelo pensando" es la
+ * única forma de contestar "¿por qué tarda?" sin adivinar, y cambia por
+ * completo qué conviene hacer: si manda el bridge, hay que pedir menos vueltas;
+ * si manda el modelo, no hay nada que optimizar de este lado.
+ */
+export function timingLine(t: NonNullable<Turn["timing"]>): string {
+  const seg = (ms: number) =>
+    ms < 60_000 ? `${(ms / 1000).toFixed(0)}s` : `${Math.floor(ms / 60_000)}m${String(Math.round((ms % 60_000) / 1000)).padStart(2, "0")}s`
+
+  const pct = t.totalMs > 0 ? Math.round((t.toolMs / t.totalMs) * 100) : 0
+  return `⏱ ${seg(t.totalMs)}  ·  ${seg(t.toolMs)} en packet tracer (${pct}%)  ·  ${seg(Math.max(0, t.totalMs - t.toolMs))} en el modelo`
 }
 
 /**
@@ -409,6 +440,12 @@ export function Chat(props: {
                     fuera de pantalla en cualquier deploy real. */}
                 <Show when={turn.tools?.length}>
                   <Tools tools={turn.tools!} />
+                </Show>
+                {/* Solo cuando la espera fue larga: en un turno de tres
+                    segundos nadie se pregunta a dónde se fue el tiempo. */}
+                <Show when={turn.timing && turn.timing.totalMs >= 20_000}>
+                  <text style={{ fg: C.rule }}>{timingLine(turn.timing!)}</text>
+                  <box style={{ height: 1 }} />
                 </Show>
                 <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>
                   <Body text={turn.text} width={props.mapWidth} />

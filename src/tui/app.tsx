@@ -177,6 +177,9 @@ export function App(props: {
   let session: Session | undefined
   // Disposición del último plano dibujado, para no repetirlo turno tras turno.
   let mapped = ""
+  // Cronometraje del turno: cuándo arrancó cada tool y cuánto sumaron todas.
+  const openedAt = new Map<string, number>()
+  let toolMs = 0
   // Tools del turno en curso, como signal para que el panel las muestre
   // mientras corren en vez de recién al cerrar el turno.
   const [live, setLive] = createSignal<NonNullable<Turn["tools"]>>([])
@@ -229,15 +232,24 @@ export function App(props: {
           break
 
         case "tool_start":
-          setLive((l) => [...l, { name: ev.name, done: false, isError: false }])
+          // El instante se guarda por id: dos llamadas a la misma tool pueden
+          // solaparse, y emparejarlas por nombre le daría a una el tiempo de
+          // la otra.
+          openedAt.set(ev.id, Date.now())
+          setLive((l) => [...l, { id: ev.id, name: ev.name, done: false, isError: false }])
           break
 
         case "tool_end": {
+          const started = openedAt.get(ev.id)
+          openedAt.delete(ev.id)
+          const ms = started ? Date.now() - started : 0
+          toolMs += ms
+
           setLive((l) => {
-            const i = l.findIndex((x) => x.name === ev.name && !x.done)
+            const i = l.findIndex((x) => (x.id ? x.id === ev.id : x.name === ev.name && !x.done))
             if (i === -1) return l
             const copy = [...l]
-            copy[i] = { ...copy[i]!, done: true, isError: ev.isError }
+            copy[i] = { ...copy[i]!, done: true, isError: ev.isError, ms }
             return copy
           })
           if (PT_TOOL.test(ev.name)) {
@@ -263,8 +275,11 @@ export function App(props: {
             role: "agent",
             text: ev.text || streaming(),
             tools,
+            timing: { totalMs: Date.now() - startedAt(), toolMs },
             ...(map ? { map } : {}),
           }])
+          toolMs = 0
+          openedAt.clear()
           setStreaming("")
           setBusy(false)
           setPhase("idle")

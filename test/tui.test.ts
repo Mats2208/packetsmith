@@ -3,7 +3,7 @@
 // ve realmente en pantalla en vez de suponerlo.
 import { expect, test, describe } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { Chat, columnWidths, shortToolName, type Turn } from "../src/tui/chat.tsx"
+import { Chat, columnWidths, shortToolName, summarizeTools, timingLine, type Turn } from "../src/tui/chat.tsx"
 import { Canvas, guide } from "../src/tui/canvas.tsx"
 import { bridgeIsUp } from "../src/tui/app.tsx"
 import type { Topology } from "../src/topology/model.ts"
@@ -222,6 +222,35 @@ describe("Canvas", () => {
   test("resume el tamaño de la red en el encabezado", async () => {
     const frame = await frameOf(() => Canvas({ topology: TOPO, lastTool: "pt_full_build" }), 46, 14)
     expect(frame).toContain("3 NODES · 2 LINKS")
+  })
+})
+
+describe("a dónde se fue el tiempo", () => {
+  // "Esto va lento" no se contesta mirando: la espera puede estar en el modelo
+  // o en Packet Tracer, y la respuesta cambia por completo qué hay que hacer.
+  test("reparte el turno entre el bridge y el modelo", () => {
+    const l = timingLine({ totalMs: 306_000, toolMs: 240_000 })
+    expect(l).toContain("5m06s")
+    expect(l).toContain("4m00s en packet tracer (78%)")
+    expect(l).toContain("1m06s en el modelo")
+  })
+
+  test("un turno sin tools es todo del modelo", () => {
+    expect(timingLine({ totalMs: 8000, toolMs: 0 })).toContain("(0%)")
+  })
+
+  test("los badges muestran el tiempo solo cuando es notorio", () => {
+    // Ponerle número a cada tool convierte la fila de badges en un log.
+    const t = (name: string, ms: number) => ({ name, done: true, isError: false, ms })
+    expect(summarizeTools([t("pt_send_raw", 200)]).ok[0]).toBe("pt_send_raw")
+    expect(summarizeTools([t("pt_send_raw", 4200)]).ok[0]).toBe("pt_send_raw  4.2s")
+  })
+
+  test("las repeticiones suman su tiempo", () => {
+    // 25 llamadas de dos segundos son cincuenta segundos, y eso es lo que hay
+    // que ver: el ×25 solo no dice cuánto costó.
+    const t = { name: "pt_send_raw", done: true, isError: false, ms: 2000 }
+    expect(summarizeTools([t, t, t]).ok[0]).toBe("pt_send_raw ×3  6.0s")
   })
 })
 

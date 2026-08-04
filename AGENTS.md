@@ -134,6 +134,28 @@ Rules for that path, and they are not negotiable:
   429. Without it the meter vanished exactly when it mattered: near the cap is when you check
   most and when the endpoint fails most.
 
+## "It feels slow" — measure before you touch anything
+
+Three places can eat a turn, and they need opposite fixes. Numbers below are measured,
+not estimated; rerun them before trusting them.
+
+| Suspect | How to check | Measured |
+|---|---|---|
+| Our event consumption | `bun run bench` | **129k events/s** — 2600× more than the CLI can emit. Not it. |
+| MCP server startup | `claude -p --verbose` and read `ttft_ms` | 178 tools / 7 servers → **4.76s**; scoped to 1 → **1.99s** |
+| The bridge, per call | the `⏱` line under a turn | every `pt_*` is one HTTP round-trip to PT, strictly serial |
+
+PacketSmith runs in a **separate process** from `claude`, so slow rendering cannot make the
+model think slower. The only way we could is backpressure — failing to drain its stdout fast
+enough that the CLI blocks on write. That is what `bun run bench` exists to rule out.
+
+`pt_live_deploy` verifies **one device and one link at a time**. A 43-node topology is 85
+sequential round-trips before it returns. That is the MCP's design, not something this repo
+can fix from here — but it is why "the agent is slow" is usually "Packet Tracer is slow".
+
+The `⏱` line under any turn over 20s splits it: time in Packet Tracer vs time in the model.
+Read it before optimizing anything.
+
 ## Two views of the same network, on purpose
 
 `src/topology/tree.ts` answers **what hangs off what** — the sidebar tree.
