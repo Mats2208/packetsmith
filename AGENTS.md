@@ -114,6 +114,24 @@ thrown away, and each one replaced something we would otherwise have had to fake
 Before adding a mechanism, check whether the stream already reports it. Dump a real run with
 `claude -p --output-format stream-json --include-partial-messages --verbose` and look.
 
+**Not in the stream:** the percentage of the plan's quota already consumed. `rate_limit_event`
+carries the window, its status and the reset time — enough for a countdown, not for a gauge.
+The percentage lives behind `GET https://api.anthropic.com/api/oauth/usage`, which needs the
+OAuth token: `~/.claude/.credentials.json` on Linux/Windows, the macOS Keychain otherwise.
+That is a credential read, so it stays opt-in and explicit — never something the app does
+quietly on startup.
+
+## Two views of the same network, on purpose
+
+`src/topology/tree.ts` answers **what hangs off what** — the sidebar tree.
+`src/topology/map.ts` answers **how it is laid out** — a plan drawn from the real `x, y` of
+the Packet Tracer canvas, under the reply that changed it.
+
+They are not redundant. An uplink crossing from one edge of the canvas to the other is
+obvious in the plan and invisible in the tree; which switch a host hangs off is obvious in
+the tree and a guess in the plan. Both need **links**, which is why the system prompt insists
+on `pt_export_topology` — `pt_query_topology` counts links but does not return them.
+
 ## Conventions
 
 - **Code comments in Spanish. Public docs (README, AGENTS.md, issues) in English.**
