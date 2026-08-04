@@ -68,6 +68,24 @@ This is not a bug we can fix here — it is how the MCP's HTTP bridge works. Clo
 clients before using PacketSmith. When testing the topology pipeline while another client
 holds the port, use the fixture in `test/topology.test.ts` instead of a live export.
 
+## OpenTUI traps, measured
+
+Every one of these cost a rendering session to find, and none of them is visible to
+`tsc`. Run `bun run preview` after touching `src/tui/` — it prints the real character
+frames for three fixed states in about a second, no Packet Tracer and no tokens.
+
+| Trap | What you see | The rule |
+|---|---|---|
+| Sibling `<text>` without `flexDirection: "row"` | a 3-line wordmark drawn as 1 line | rows are explicit, never implied |
+| A box wrapping multi-row content with no `height` | the block below overwrites its last row | any box holding N rows declares `height: N` |
+| A wrapper box added just for `marginTop` | same collapse, one level up | margins are props on the art component, not extra boxes |
+| Anything placed **after** a `scrollbox` | never drawn at all | status goes above the scrollbox, always |
+| Text overflowing a fixed-width panel | the line wraps and the grid breaks | truncate with `…` before you overflow |
+
+Two that are useful rather than hostile: a `flexGrow` box **clips** its overflowing child,
+which gives width-independent fillers without measuring the terminal; and `border: ["left"]`
+with `customBorderChars` gives a single rule instead of a box.
+
 ## Conventions
 
 - **Code comments in Spanish. Public docs (README, AGENTS.md, issues) in English.**
