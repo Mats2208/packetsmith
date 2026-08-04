@@ -2,8 +2,8 @@
 // y arma los turnos es app.tsx.
 import { For, Show } from "solid-js"
 import { C } from "./theme.ts"
-import { CHAIN, wordmark } from "./ascii.ts"
-import { Art, GUTTER, Plate } from "./frame.tsx"
+import { GUTTER } from "./frame.tsx"
+import { Welcome } from "./welcome.tsx"
 
 export interface Turn {
   role: "user" | "agent"
@@ -242,50 +242,51 @@ export function Chat(props: {
   busy: boolean
   /** Tools del turno EN CURSO: se ven mientras corren, no al terminar. */
   liveTools?: NonNullable<Turn["tools"]>
+  /** Estado del puente con PT, para la pantalla de arranque. */
+  live?: boolean
 }) {
+  // La bienvenida REEMPLAZA la conversación, no la encabeza: así puede tomarse
+  // el alto entero y centrarse, que es lo que la hace ver como una portada en
+  // vez de un cartel pegado arriba a la izquierda.
+  const vacio = () => !props.turns.length && !props.streaming && !props.liveTools?.length
+
   return (
     <box style={{ flexDirection: "column", flexGrow: 1, paddingLeft: 1, paddingRight: 1 }}>
-      {/* El banner ocupa filas que el chat necesita, así que vive solo hasta el
-          primer mensaje. */}
-      <Show when={!props.turns.length && !props.streaming}>
-        <box style={{ flexDirection: "column", marginTop: 2, marginLeft: 2 }}>
-          <Art rows={wordmark()} />
-          <Plate lines={CHAIN} marginTop={1} />
-          <box style={{ height: 1, marginTop: 1 }}>
-            <text style={{ fg: C.dim }}>{"describí una red en lenguaje natural."}</text>
-          </box>
-        </box>
+      <Show when={vacio()}>
+        <Welcome live={props.live} />
       </Show>
 
-      <scrollbox style={{ flexGrow: 1 }}>
-        <For each={props.turns}>
-          {(turn) => (
-            <Block role={turn.role}>
-              {/* Las tools van ANTES del texto: son lo que el agente hizo para
-                  poder responder, y dejarlas después empujaba la respuesta
-                  fuera de pantalla en cualquier deploy real. */}
-              <Show when={turn.tools?.length}>
-                <Tools tools={turn.tools!} />
+      <Show when={!vacio()}>
+        <scrollbox style={{ flexGrow: 1 }}>
+          <For each={props.turns}>
+            {(turn) => (
+              <Block role={turn.role}>
+                {/* Las tools van ANTES del texto: son lo que el agente hizo para
+                    poder responder, y dejarlas después empujaba la respuesta
+                    fuera de pantalla en cualquier deploy real. */}
+                <Show when={turn.tools?.length}>
+                  <Tools tools={turn.tools!} />
+                </Show>
+                <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>
+                  <Body text={turn.text} />
+                </Show>
+              </Block>
+            )}
+          </For>
+
+          {/* El turno en curso se pinta aparte: todavía no está cerrado. */}
+          <Show when={props.streaming || props.liveTools?.length}>
+            <Block role="agent">
+              <Show when={props.liveTools?.length}>
+                <Tools tools={props.liveTools!} />
               </Show>
-              <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>
-                <Body text={turn.text} />
+              <Show when={props.streaming}>
+                <text>{props.streaming}</text>
               </Show>
             </Block>
-          )}
-        </For>
-
-        {/* El turno en curso se pinta aparte: todavía no está cerrado. */}
-        <Show when={props.streaming || props.liveTools?.length}>
-          <Block role="agent">
-            <Show when={props.liveTools?.length}>
-              <Tools tools={props.liveTools!} />
-            </Show>
-            <Show when={props.streaming}>
-              <text>{props.streaming}</text>
-            </Show>
-          </Block>
-        </Show>
-      </scrollbox>
+          </Show>
+        </scrollbox>
+      </Show>
     </box>
   )
 }

@@ -4,7 +4,7 @@
 import { expect, test, describe } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { Chat, shortToolName, type Turn } from "../src/tui/chat.tsx"
-import { Canvas } from "../src/tui/canvas.tsx"
+import { Canvas, guide } from "../src/tui/canvas.tsx"
 import { bridgeIsUp } from "../src/tui/app.tsx"
 import type { Topology } from "../src/topology/model.ts"
 import { EMPTY } from "../src/topology/ingest.ts"
@@ -175,6 +175,26 @@ describe("Canvas", () => {
     const r1 = rows.findIndex((l) => l.includes("R1"))
     const pc1 = rows.findIndex((l) => l.includes("PC1"))
     expect(rows[pc1]!.indexOf("PC1")).toBeGreaterThan(rows[r1]!.indexOf("R1"))
+    expect(frame).toContain("└── ")
+  })
+
+  test("las IPs quedan a plomo por más hondo que esté el equipo", async () => {
+    // El relleno era relativo a la sangría, así que a tercer nivel el nombre se
+    // quedaba sin espacio y salía pegado: "SRV1192.168.1.10".
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
+    const cols = frame.split("\n")
+      .filter((l) => /\d+\.\d+\.\d+\.\d+/.test(l))
+      .map((l) => l.search(/\d+\.\d+\.\d+\.\d+/))
+    expect(new Set(cols).size).toBe(1)
+  })
+
+  test("avisa cuando la lista viene sin enlaces", async () => {
+    // `pt_query_topology` cuenta los enlaces pero no los devuelve. Una lista
+    // plana sin aviso se lee como si esa fuera la red.
+    const plana = { devices: TOPO.devices, links: [] }
+    const frame = await frameOf(() => Canvas({ topology: plana }), 46, 16)
+    expect(frame).toContain("sin enlaces")
+    expect(frame).toContain("pt_export_topology")
   })
 
   test("el indicador de enlace distingue conectado de no conectado", async () => {
@@ -202,6 +222,26 @@ describe("Canvas", () => {
   test("resume el tamaño de la red en el encabezado", async () => {
     const frame = await frameOf(() => Canvas({ topology: TOPO, lastTool: "pt_full_build" }), 46, 14)
     expect(frame).toContain("3 NODES · 2 LINKS")
+  })
+})
+
+describe("guías del árbol", () => {
+  // Sin las verticales, un host de tercer nivel no dice de qué switch cuelga:
+  // hay que contar espacios. `ancestors[i]` dice si ese ancestro todavía tiene
+  // hermanos abajo; el último elemento es el padre directo y lo reemplaza el
+  // conector, así que no dibuja vertical.
+  test("una raíz no lleva guía", () => {
+    expect(guide([], true)).toBe("")
+  })
+
+  test("el último hijo cierra la rama y los demás la continúan", () => {
+    expect(guide([true], true)).toBe("└── ")
+    expect(guide([true], false)).toBe("├── ")
+  })
+
+  test("la vertical baja solo mientras el ancestro tenga hermanos", () => {
+    expect(guide([true, false], false)).toBe("│  ├── ")
+    expect(guide([false, true], false)).toBe("   ├── ")
   })
 })
 
@@ -266,34 +306,44 @@ describe("markdown selectivo", () => {
 })
 
 describe("pantalla de bienvenida", () => {
+  const welcome = (live?: boolean) =>
+    frameOf(() => Chat({ turns: [], streaming: "", busy: false, live }), 76, 26)
+
   test("el wordmark se dibuja completo, no colapsado", async () => {
     // Gotcha de OpenTUI: varios <text> hermanos se pintan sobre la MISMA fila,
     // y un <text> multilínea sin altura declarada deja que el siguiente le pise
     // las últimas. El wordmark de 3 filas llegó a verse como 1.
-    const frame = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 22)
-    const rows = frame.split("\n").filter((r) => r.includes("█"))
+    const rows = (await welcome()).split("\n").filter((r) => r.includes("█"))
     expect(rows.length).toBeGreaterThanOrEqual(3)
   })
 
-  test("el reflejo no se come la primera fila de la cadena", async () => {
-    // Una caja sin alto declarado mide una fila de menos y el bloque siguiente
-    // le pisa la última: el reflejo terminaba dibujado sobre el diagrama.
-    const frame = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 22)
-    const rows = frame.split("\n")
-    const top = rows.find((r) => r.includes("┌───────┐"))!
-    expect(top).not.toContain("▀")
+  test("enseña qué pedir, con frases copiables", async () => {
+    // Explicar qué hace la app no sirve tanto como mostrar tres cosas que se
+    // pueden pegar tal cual. La primera es de LECTURA a propósito: quien recién
+    // llega prueba sin miedo a desarmar su laboratorio.
+    const frame = await welcome()
+    expect(frame).toContain("PROBÁ CON")
+    expect(frame).toContain("leé la topología")
+    expect(frame).toContain("OSPF")
   })
 
-  test("muestra la cadena entera, ida y vuelta", async () => {
-    const empty = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 60, 22)
-    expect(empty).toContain("PACKET TRACER")
-    // El lazo de retorno es la mitad que no se explica sola: el panel deriva de
-    // lo que PT devuelve, no lo dibuja PacketSmith de memoria.
-    expect(empty).toContain("TOPOLOGÍA")
+  test("el estado del puente es en vivo, no un cartel", async () => {
+    // La pregunta que se hace todo el mundo al abrir esto es si Packet Tracer
+    // está conectado. Se contesta antes de que la haga.
+    expect(await welcome(false)).toContain("sin conexión")
+    expect(await welcome(false)).toContain("MCP BUILDER")
 
-    // Un banner permanente robaría las filas que el chat necesita.
+    const on = await welcome(true)
+    expect(on).toContain("packet tracer conectado")
+    // Con el puente arriba no hay nada que arreglar: la instrucción sobra.
+    expect(on).not.toContain("MCP BUILDER")
+  })
+
+  test("desaparece al primer mensaje", async () => {
+    // Una portada permanente robaría las filas que el chat necesita.
     const used = await frameOf(
-      () => Chat({ turns: [{ role: "user", text: "hola" }], streaming: "", busy: false }), 60, 22)
-    expect(used).not.toContain("PACKET TRACER")
+      () => Chat({ turns: [{ role: "user", text: "hola" }], streaming: "", busy: false }), 76, 26)
+    expect(used).not.toContain("PROBÁ CON")
+    expect(used).toContain("hola")
   })
 })

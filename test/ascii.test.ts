@@ -2,7 +2,7 @@
 // microsegundos y atrapa lo que en pantalla se ve como un dibujo roto y en el
 // código no se ve como nada.
 import { expect, test, describe } from "bun:test"
-import { bar, rule, sweep, wordmark, WORDMARK, CHAIN, SCHEMATIC } from "../src/tui/ascii.ts"
+import { bar, rule, sweep, wordmark, WORDMARK, SCHEMATIC } from "../src/tui/ascii.ts"
 
 describe("wordmark", () => {
   test("las tres filas del arte más una de reflejo", () => {
@@ -32,13 +32,6 @@ describe("wordmark", () => {
 })
 
 describe("diagramas", () => {
-  test("la cadena tiene todas sus filas del mismo largo", () => {
-    // Una fila corta desalinea las cajas y el diagrama deja de cerrar.
-    const width = Math.max(...CHAIN.map((l) => l.length))
-    for (const line of CHAIN) expect(line.padEnd(width)).toHaveLength(width)
-    expect(CHAIN.join("\n")).toContain("TOPOLOGÍA")
-  })
-
   test("el esquema del panel vacío entra en el ancho del panel", () => {
     // El panel mide 42 y descuenta filete y márgenes; si el dibujo se pasa,
     // OpenTUI lo reflowea y el esquema se desarma.

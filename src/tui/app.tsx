@@ -198,8 +198,10 @@ export function App(props: { engine: Engine; model?: string }) {
       <box style={{ paddingLeft: 1, paddingRight: 1 }}>
         <Hud
           segments={[
-            { text: "PACKETSMITH", fg: C.fg },
-            { text: props.engine.name.toUpperCase() },
+            // El nombre es lo único de marca en la cabecera. El resto son
+            // datos, y los datos no llevan color de marca.
+            { text: "PACKETSMITH", fg: C.brand },
+            { text: props.engine.name.toUpperCase(), fg: C.fg },
             // El motor ya dijo "CLAUDE"; repetirlo en el modelo daba
             // "CLAUDE ▏ CLAUDE-OPUS-5", que ocupa el doble y no dice más.
             { text: model().toUpperCase().replace(/^CLAUDE-/, "") },
@@ -214,7 +216,13 @@ export function App(props: { engine: Engine; model?: string }) {
           fondo apenas distinto. Dos rectángulos anidados leían como formulario,
           no como consola. */}
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
-        <Chat turns={turns()} streaming={streaming()} busy={busy()} liveTools={live()} />
+        <Chat
+          turns={turns()}
+          streaming={streaming()}
+          busy={busy()}
+          liveTools={live()}
+          live={bridgeLive()}
+        />
         <Canvas topology={topology()} lastTool={lastTool()} live={bridgeLive()} />
       </box>
 
@@ -242,14 +250,12 @@ export function App(props: { engine: Engine; model?: string }) {
         />
       </box>
 
-      {/* El atajo va en el placeholder y no en una leyenda fija: se ve justo
-          cuando hace falta —el campo vacío— y desaparece al escribir la primera
-          letra, sin quedarse ocupando un renglón para siempre. */}
+      {/* Los atajos NO van acá: los enseña la pantalla de arranque, que es
+          donde uno los lee. Repetirlos en el placeholder los convierte en
+          ruido permanente en la línea donde se escribe. */}
       <Prompt
         busy={busy()}
-        placeholder={
-          busy() ? "el agente está trabajando…" : "describí la red que querés   ⏎ enviar · ⇧⏎ nueva línea"
-        }
+        placeholder={busy() ? "el agente está trabajando…" : "describí la red que querés"}
         onSubmit={submit}
       />
     </box>

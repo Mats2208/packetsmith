@@ -65,21 +65,6 @@ export function wordmark(): Run[][] {
 }
 
 /**
- * La cadena completa, ida y vuelta.
- *
- * El lazo de retorno es la mitad que importa y la que no se explica sola: el
- * panel de topología no lo dibuja PacketSmith de memoria, lo deriva de lo que
- * Packet Tracer devuelve. Un diagrama de tres cajas en fila lo ocultaba.
- */
-export const CHAIN = [
-  "┌───────┐    ┌────────┐    ┌───────────────┐",
-  "│  VOS  │───▶│ AGENTE │───▶│ PACKET TRACER │",
-  "└───────┘    └────────┘    └───────┬───────┘",
-  "    ▲                              │",
-  "    └────────── TOPOLOGÍA ─────────┘",
-] as const
-
-/**
  * Esquema genérico para el panel vacío.
  *
  * Un panel en blanco con la palabra "esperando" no dice qué va a aparecer. Este

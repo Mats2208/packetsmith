@@ -14,9 +14,9 @@ import type { Run, Tone } from "./ascii.ts"
 
 /** Cada tono del arte, resuelto a color. El arte no sabe de colores. */
 export const TONE: Record<Tone, string> = {
-  art: C.fg,
-  muted: C.dim,
-  shadow: C.shadow,
+  art: C.brand,
+  muted: C.fg,
+  shadow: C.rule,
 }
 
 /**

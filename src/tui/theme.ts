@@ -29,6 +29,16 @@ export const C = {
   warn: "#D97706",
   /** Fósforo verde. EXCLUSIVO del estado del enlace con PT. */
   live: "#4AF626",
+  /**
+   * Color de marca. Identidad y NADA más: el wordmark, el nombre en la
+   * cabecera, los títulos de sección.
+   *
+   * Es cian y no verde ni ámbar porque los otros dos ya están tomados por
+   * estados —enlace y aviso— y un color que a veces es marca y a veces es
+   * estado deja de querer decir algo. Cian además es el que no aparece en
+   * ninguna salida de Cisco, así que nunca se confunde con datos.
+   */
+  brand: "#38BDF8",
   /** Quien habla: el operador. */
   operator: "#EAEAEA",
   /** Superficie hundida — bloques de código. */
