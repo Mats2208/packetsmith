@@ -301,7 +301,13 @@ export function timingLine(t: NonNullable<Turn["timing"]>): string {
   const seg = (ms: number) =>
     ms < 60_000 ? `${(ms / 1000).toFixed(0)}s` : `${Math.floor(ms / 60_000)}m${String(Math.round((ms % 60_000) / 1000)).padStart(2, "0")}s`
 
-  const pct = t.totalMs > 0 ? Math.round((t.toolMs / t.totalMs) * 100) : 0
+  // El desglose recién vale la pena cuando la espera se sintió. En un turno de
+  // ocho segundos repartir entre bridge y modelo es ruido; el total, en cambio,
+  // va SIEMPRE: es un parámetro más del turno y queda ahí para consultarlo
+  // después, que es justo lo que no se podía hacer con el reloj de la barra.
+  if (t.totalMs < 20_000) return `⏱ ${seg(t.totalMs)}`
+
+  const pct = Math.round((t.toolMs / t.totalMs) * 100)
   return `⏱ ${seg(t.totalMs)}  ·  ${seg(t.toolMs)} en packet tracer (${pct}%)  ·  ${seg(Math.max(0, t.totalMs - t.toolMs))} en el modelo`
 }
 
@@ -441,9 +447,7 @@ export function Chat(props: {
                 <Show when={turn.tools?.length}>
                   <Tools tools={turn.tools!} />
                 </Show>
-                {/* Solo cuando la espera fue larga: en un turno de tres
-                    segundos nadie se pregunta a dónde se fue el tiempo. */}
-                <Show when={turn.timing && turn.timing.totalMs >= 20_000}>
+                <Show when={turn.timing}>
                   <text style={{ fg: C.rule }}>{timingLine(turn.timing!)}</text>
                   <box style={{ height: 1 }} />
                 </Show>

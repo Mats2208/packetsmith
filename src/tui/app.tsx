@@ -271,11 +271,18 @@ export function App(props: {
           const map = worthMapping(topo) && key !== mapped ? topo : undefined
           if (map) mapped = key
 
+          // Solo hay tiempo que informar si el turno arrancó con un mensaje
+          // nuestro. Sin esa marca, `Date.now() - 0` da la edad del epoch y la
+          // línea mostraba "29764558m36s" con toda seriedad.
+          const timing = startedAt()
+            ? { totalMs: Date.now() - startedAt(), toolMs }
+            : undefined
+
           setTurns((t) => [...t, {
             role: "agent",
             text: ev.text || streaming(),
             tools,
-            timing: { totalMs: Date.now() - startedAt(), toolMs },
+            ...(timing ? { timing } : {}),
             ...(map ? { map } : {}),
           }])
           toolMs = 0

@@ -108,6 +108,9 @@ const ESCENAS: Record<string, AgentEvent[]> = {
     { type: "phase", phase: "tool", detail: "mcp__packet-tracer__pt_verify_connectivity" },
   ],
 
+  // El turno arranca "a mitad de camino" —sin el submit que en la app real le
+  // pone la marca de tiempo—, así que este no muestra la línea de ⏱. Es
+  // correcto: sin esa marca no hay tiempo que informar.
   desplegado: [
     READY,
     LIMITS,
