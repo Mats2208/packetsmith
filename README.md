@@ -87,33 +87,34 @@ The plan is drawn only when the **layout changed** — moving one device counts.
 
 Working today: the streaming engine, the split-screen TUI, the fabric tree and canvas plan, the activity and budget meters, and per-turn timing. Not there yet: Codex/OpenCode adapters, multi-session, packaging.
 
-## Requirements
+## Install
 
-PacketSmith **runs on top of the MCP — it does not bundle it.** Three pieces, in this order:
-
-| | Why | How |
-|---|---|---|
-| [Bun](https://bun.sh) ≥ 1.3 | OpenTUI needs it — this will **not** run on Node | `brew install oven-sh/bun/bun` |
-| `claude` CLI, authenticated | PacketSmith spawns it; it is the agent | [claude.com/claude-code](https://claude.com/claude-code) |
-| [MCP-Packet-Tracer](https://github.com/Mats2208/MCP-Packet-Tracer) **registered with the CLI** | it is what actually drives Packet Tracer | `claude mcp add packet-tracer …` |
-
-Plus Cisco Packet Tracer itself, running, with **Extensions ▸ MCP BUILDER** open.
-
-If the MCP is not registered, PacketSmith says so on its first screen and prints the command
-— because the failure is silent otherwise: the agent starts, answers normally, and has no
-`pt_*` tools at all.
-
-## Run
-
-There is **no npm package yet** — and `npm install` would not work anyway, since this needs
-Bun rather than Node. Clone it:
+You need [**Bun**](https://bun.sh) ≥ 1.3 and an authenticated [**`claude`**](https://claude.com/claude-code) CLI. Bun is not optional — OpenTUI will not run on Node.
 
 ```bash
 git clone https://github.com/Mats2208/packetsmith
 cd packetsmith
 bun install
-bun run src/index.tsx
+bun run setup     # installs the MCP, registers it, fetches the PT extension
+bun run dev
 ```
+
+`bun run setup` checks what you already have and **asks before every step**. It creates a Python environment under `~/.packetsmith`, installs [MCP-Packet-Tracer](https://github.com/Mats2208/MCP-Packet-Tracer) from source (it is not on PyPI), registers it with `claude mcp add --scope user`, and downloads the `.pts` extension. Run it with `--dry-run` first if you want to see the plan without touching anything.
+
+**One step cannot be automated:** Packet Tracer only accepts an extension through its own menu — *Extensions ▸ Scripting ▸ Configure PT Script Modules ▸ Add…*, then *Extensions ▸ MCP BUILDER*. Setup prints the exact path to select.
+
+### What setup actually needs
+
+| | Why | Automated? |
+|---|---|---|
+| Bun ≥ 1.3 | OpenTUI needs it | no — install it yourself |
+| `claude` CLI, authenticated | it *is* the agent PacketSmith wraps | no |
+| MCP-Packet-Tracer, installed | it is what drives Packet Tracer | **yes** |
+| …registered with the CLI | otherwise the agent has **zero** `pt_*` tools | **yes** |
+| `.pts` extension downloaded | the bridge inside Packet Tracer | **yes** |
+| …loaded into Packet Tracer | GUI only | no — three clicks |
+
+If the MCP is missing, PacketSmith says so on its first screen and prints the command. That failure is silent otherwise: the agent starts, answers normally, and cannot touch Packet Tracer.
 
 > **One MCP client at a time.** The Packet Tracer MCP binds `127.0.0.1:54321` and only one process can hold it. If Claude Code, Cursor or Claude Desktop is running with that MCP configured, **close it first** — otherwise every `pt_*` call answers *"no está conectado"*.
 

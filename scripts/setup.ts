@@ -1,0 +1,157 @@
+// Deja PacketSmith listo para usar. `bun run setup`.
+//
+// Son cuatro piezas y ninguna es obvia: el CLI de Claude, el servidor MCP
+// —que no está en PyPI, así que se instala del repo—, su registro en la config
+// del CLI, y la extensión de Packet Tracer.
+//
+// Regla de la casa: NADA se instala sin preguntar. Este script crea un venv,
+// baja código de internet y toca la configuración del CLI del usuario. Cada
+// una de esas tres cosas se anuncia y se confirma antes de hacerse, y se puede
+// correr con `--dry-run` para ver el plan sin ejecutar nada.
+import { existsSync, mkdirSync } from "node:fs"
+import { homedir } from "node:os"
+import { join } from "node:path"
+import { isConfigured } from "../src/engine/mcp.ts"
+
+const REPO = "https://github.com/Mats2208/MCP-Packet-Tracer"
+const HOME = homedir()
+const DEST = join(HOME, ".packetsmith")
+const VENV = join(DEST, "mcp-venv")
+const PTS = join(DEST, "MCP-Control-Center.pts")
+
+const DRY = process.argv.includes("--dry-run")
+const YES = process.argv.includes("--yes")
+
+const c = {
+  t: (s: string) => `\x1b[38;2;234;234;234m${s}\x1b[0m`,
+  d: (s: string) => `\x1b[38;2;107;107;107m${s}\x1b[0m`,
+  b: (s: string) => `\x1b[38;2;56;189;248m${s}\x1b[0m`,
+  ok: (s: string) => `\x1b[38;2;74;246;38m${s}\x1b[0m`,
+  no: (s: string) => `\x1b[38;2;230;25;25m${s}\x1b[0m`,
+  w: (s: string) => `\x1b[38;2;217;119;6m${s}\x1b[0m`,
+}
+
+/** Corre un comando y devuelve si salió bien. En dry-run solo lo imprime. */
+async function run(cmd: string[], label: string): Promise<boolean> {
+  console.log(c.d(`  $ ${cmd.join(" ")}`))
+  if (DRY) return true
+  const p = Bun.spawn(cmd, { stdout: "inherit", stderr: "inherit" })
+  const code = await p.exited
+  if (code !== 0) console.log(c.no(`  ✗ falló: ${label}`))
+  return code === 0
+}
+
+async function has(bin: string): Promise<boolean> {
+  return (await Bun.spawn(["which", bin], { stdout: "ignore", stderr: "ignore" }).exited) === 0
+}
+
+/**
+ * Pregunta antes de tocar nada.
+ *
+ * Un instalador que crea entornos, baja código y edita la configuración de otro
+ * programa sin avisar es exactamente lo que uno no quiere correr.
+ */
+async function confirm(question: string): Promise<boolean> {
+  if (YES || DRY) return true
+  process.stdout.write(`${c.t(question)} ${c.d("[s/N]")} `)
+  const line = await new Promise<string>((res) => {
+    process.stdin.once("data", (d) => res(String(d)))
+  })
+  return /^s(i|í)?$/i.test(line.trim())
+}
+
+console.log(`\n${c.b("PACKETSMITH")} ${c.d("· setup")}${DRY ? c.d("  (dry-run)") : ""}\n`)
+
+// ── 1. Lo que tiene que estar de antes ──────────────────────────────────────
+let falta = false
+for (const [bin, why] of [
+  ["bun", "corre la app — OpenTUI no anda en Node"],
+  ["claude", "es el agente que PacketSmith envuelve"],
+  ["python3", "corre el servidor MCP"],
+  ["git", "baja el servidor MCP"],
+] as const) {
+  const ok = await has(bin)
+  console.log(`  ${ok ? c.ok("●") : c.no("○")} ${c.t(bin.padEnd(9))}${c.d(why)}`)
+  if (!ok) falta = true
+}
+if (falta) {
+  console.log(`\n${c.no("Falta alguna herramienta de arriba.")} Instalala y volvé a correr esto.\n`)
+  process.exit(1)
+}
+
+// ── 2. El servidor MCP ──────────────────────────────────────────────────────
+console.log()
+if (isConfigured(HOME, process.cwd())) {
+  console.log(`  ${c.ok("●")} ${c.t("el MCP ya está registrado en el CLI")} ${c.d("— nada que hacer")}`)
+} else {
+  console.log(c.t("El MCP de Packet Tracer no está registrado. Para dejarlo listo hace falta:"))
+  console.log(c.d(`    · clonar ${REPO}`))
+  console.log(c.d(`      en ${DEST}`))
+  console.log(c.d(`    · crear un entorno de Python ahí e instalarlo`))
+  console.log(c.d(`    · registrarlo en tu config del CLI (claude mcp add, scope usuario)`))
+  console.log()
+
+  if (!(await confirm("¿Lo hago?"))) {
+    console.log(c.d("\n  Ok, no toco nada. El comando manual está en el README.\n"))
+    process.exit(0)
+  }
+
+  if (!DRY) mkdirSync(DEST, { recursive: true })
+  const src = join(DEST, "MCP-Packet-Tracer")
+
+  if (!existsSync(src) && !(await run(["git", "clone", "--depth", "1", REPO, src], "clone"))) {
+    process.exit(1)
+  }
+  if (!existsSync(VENV) && !(await run(["python3", "-m", "venv", VENV], "venv"))) process.exit(1)
+
+  const pip = join(VENV, "bin", "pip")
+  const py = join(VENV, "bin", "python")
+  // `mcp<2` porque `mcp.server.fastmcp` desapareció en la 2.0 y el servidor no
+  // arranca. Va explícito y no confiado al pyproject: si alguna vez se afloja
+  // ahí, esto sigue instalando una versión que funciona.
+  if (!(await run([pip, "install", "-q", "mcp<2"], "mcp<2"))) process.exit(1)
+  if (!(await run([pip, "install", "-q", "-e", src], "packet-tracer-mcp"))) process.exit(1)
+
+  const ok = await run(
+    ["claude", "mcp", "add", "packet-tracer", "--scope", "user",
+      "--", py, "-m", "packet_tracer_mcp", "--stdio"],
+    "claude mcp add",
+  )
+  if (!ok) process.exit(1)
+  console.log(`  ${c.ok("●")} ${c.t("MCP instalado y registrado")}`)
+}
+
+// ── 3. La extensión de Packet Tracer ────────────────────────────────────────
+//
+// Se puede BAJAR sola, pero cargarla no: Packet Tracer solo la acepta por su
+// menú. Lo honesto es dejarla a mano y decir los tres clics exactos, en vez de
+// mandar a buscar un release.
+console.log()
+if (existsSync(PTS)) {
+  console.log(`  ${c.ok("●")} ${c.t("extensión ya descargada")}`)
+} else if (await confirm("¿Bajo la extensión de Packet Tracer (.pts)?")) {
+  if (!DRY) mkdirSync(DEST, { recursive: true })
+  const rel = await fetch("https://api.github.com/repos/Mats2208/MCP-Packet-Tracer/releases/latest")
+    .then((r) => r.json())
+    .catch(() => null)
+  const asset = rel?.assets?.find((a: any) => String(a.name).endsWith(".pts"))
+
+  if (!asset) {
+    console.log(c.w(`  ⚠ no encontré el .pts en los releases — bajalo de ${REPO}/releases`))
+  } else if (DRY) {
+    console.log(c.d(`  ↓ ${asset.name} → ${PTS}`))
+  } else {
+    await Bun.write(PTS, await fetch(asset.browser_download_url).then((r) => r.arrayBuffer()))
+    console.log(`  ${c.ok("●")} ${c.t(asset.name)} ${c.d("→")} ${c.d(PTS)}`)
+  }
+}
+
+console.log(`
+${c.t("Último paso, y este va a mano porque Packet Tracer no acepta otra cosa:")}
+
+  ${c.b("1.")} Packet Tracer ${c.d("▸")} Extensions ${c.d("▸")} Scripting ${c.d("▸")} Configure PT Script Modules
+  ${c.b("2.")} Add… ${c.d("y elegí")} ${c.d(PTS)}
+  ${c.b("3.")} Extensions ${c.d("▸")} MCP BUILDER ${c.d("— se conecta solo")}
+
+${c.d("Después:")} ${c.t("bun run src/index.tsx")}
+`)

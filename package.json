@@ -2,20 +2,56 @@
   "name": "packetsmith",
   "version": "0.2.0",
   "description": "Terminal agent for Cisco Packet Tracer. Describe a network in plain language and watch the topology build itself.",
+  "keywords": [
+    "cisco",
+    "packet-tracer",
+    "network",
+    "networking",
+    "topology",
+    "ospf",
+    "vlan",
+    "mcp",
+    "claude",
+    "agent",
+    "tui",
+    "terminal",
+    "opentui",
+    "bun"
+  ],
   "license": "MIT",
-  "author": "Mats2208",
+  "author": "Mats2208 <a2024111556@estudiantes.upsa.edu.bo>",
+  "homepage": "https://github.com/Mats2208/packetsmith#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mats2208/packetsmith.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Mats2208/packetsmith/issues"
+  },
   "type": "module",
   "module": "src/index.tsx",
   "bin": {
     "packetsmith": "src/index.tsx"
   },
+  "files": [
+    "src",
+    "scripts/setup.ts",
+    "AGENTS.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "bun run src/index.tsx",
+    "setup": "bun run scripts/setup.ts",
     "preview": "bun run scripts/preview.tsx",
     "bench": "bun run scripts/bench.tsx",
     "shots": "bun run scripts/shots.tsx",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run typecheck && bun test"
   },
   "dependencies": {
     "@opentui/core": "^0.5.1",
