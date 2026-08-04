@@ -15,6 +15,20 @@ const PT_TOOL = /(^|__)pt_/
 /** Va en la placa de la cabecera. Se sube a mano con cada release. */
 const REV = "0.2"
 
+/**
+ * Si el puente con Packet Tracer está vivo, leído del texto que devolvió la tool.
+ *
+ * Se mira el TEXTO y no el flag `isError`, por dos razones opuestas:
+ *   · "no está conectado" llega como resultado OK, no como error;
+ *   · un `isError` casi siempre es la operación que falló, no el transporte —
+ *     un `pt_apply_hardening` rechazado marcaba el puente como caído cuando
+ *     estaba perfecto, y el indicador verde se apagaba sin motivo.
+ */
+export function bridgeIsUp(output: unknown): boolean {
+  const text = typeof output === "string" ? output : JSON.stringify(output ?? "")
+  return !/no est[áa] conectado|not connected/i.test(text)
+}
+
 export function App(props: { engine: Engine; model?: string }) {
   const [turns, setTurns] = createSignal<Turn[]>([])
   const [streaming, setStreaming] = createSignal("")
@@ -70,10 +84,7 @@ export function App(props: { engine: Engine; model?: string }) {
           })
           if (PT_TOOL.test(ev.name)) {
             setLastTool(shortToolName(ev.name))
-            // "no esta conectado" llega como resultado OK, no como error:
-            // hay que mirar el texto para saber si el bridge esta vivo.
-            const txt = typeof ev.output === "string" ? ev.output : JSON.stringify(ev.output ?? "")
-            setBridgeLive(!ev.isError && !/no está conectado|not connected/i.test(txt))
+            setBridgeLive(bridgeIsUp(ev.output))
             if (!ev.isError) setTopology((cur) => ingest(cur, ev.name, ev.output))
           }
           break
@@ -119,8 +130,8 @@ export function App(props: { engine: Engine; model?: string }) {
     <box style={{ flexDirection: "column", flexGrow: 1, backgroundColor: C.bg }}>
       {/* Cabecera: identidad y capacidades. La placa `REV` de la derecha es de
           manual industrial, no adorno — dice qué versión estás mirando.
-          El estado del enlace NO va acá: vive al pie del panel de topología,
-          que es de lo que habla. Dos indicadores del mismo dato compiten. */}
+          El estado del enlace NO va acá: vive en el panel de topología, que es
+          de lo que habla. Dos indicadores del mismo dato compiten. */}
       <box style={{ paddingLeft: 1, paddingRight: 1 }}>
         <Hud
           segments={[

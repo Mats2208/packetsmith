@@ -5,6 +5,7 @@ import { expect, test, describe } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { Chat, shortToolName, type Turn } from "../src/tui/chat.tsx"
 import { Canvas } from "../src/tui/canvas.tsx"
+import { bridgeIsUp } from "../src/tui/app.tsx"
 import type { Topology } from "../src/topology/model.ts"
 import { EMPTY } from "../src/topology/ingest.ts"
 
@@ -13,6 +14,19 @@ async function frameOf(node: () => any, width = 70, height = 14): Promise<string
   await setup.renderOnce()
   return await setup.captureCharFrame()
 }
+
+describe("bridgeIsUp", () => {
+  test("una tool que falla NO significa que el puente esté caído", () => {
+    // pt_apply_hardening rechazado apagaba el indicador verde sin motivo: el
+    // que falló fue el comando, el transporte estaba perfecto.
+    expect(bridgeIsUp("ERROR: SSH sin usuarios locales")).toBe(true)
+  })
+
+  test("el puente caído se anuncia en el texto, no en el flag de error", () => {
+    expect(bridgeIsUp("Packet Tracer no está conectado al bridge")).toBe(false)
+    expect(bridgeIsUp("bridge is NOT connected")).toBe(false)
+  })
+})
 
 describe("shortToolName", () => {
   test("saca el prefijo del MCP para que quepa en el panel", () => {
