@@ -1,7 +1,9 @@
 // Composición y estado. Acá vive el ciclo: input → motor → eventos → UI.
 import { createSignal } from "solid-js"
 import type { Engine } from "../engine/types.ts"
-import { Chat, type Turn } from "./chat.tsx"
+import type { Topology } from "../topology/model.ts"
+import { EMPTY, ingest } from "../topology/ingest.ts"
+import { Chat, shortToolName, type Turn } from "./chat.tsx"
 import { Canvas } from "./canvas.tsx"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
@@ -11,7 +13,8 @@ export function App(props: { engine: Engine }) {
   const [turns, setTurns] = createSignal<Turn[]>([])
   const [streaming, setStreaming] = createSignal("")
   const [busy, setBusy] = createSignal(false)
-  const [ptEvents, setPtEvents] = createSignal<string[]>([])
+  const [topology, setTopology] = createSignal<Topology>(EMPTY)
+  const [lastTool, setLastTool] = createSignal<string>()
   const [sessionId, setSessionId] = createSignal<string>()
 
   // OpenTUI declara onSubmit como intersección de dos firmas (evento y valor),
@@ -47,7 +50,10 @@ export function App(props: { engine: Engine }) {
           case "tool_end": {
             const t = tools.find((x) => x.name === ev.name && !x.done)
             if (t) { t.done = true; t.isError = ev.isError }
-            if (PT_TOOL.test(ev.name)) setPtEvents((p) => [...p, ev.name])
+            if (PT_TOOL.test(ev.name) && !ev.isError) {
+              setTopology((cur) => ingest(cur, ev.name, ev.output))
+              setLastTool(shortToolName(ev.name))
+            }
             setTurns((x) => [...x])
             break
           }
@@ -73,7 +79,7 @@ export function App(props: { engine: Engine }) {
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
         <Chat turns={turns()} streaming={streaming()} busy={busy()} />
-        <Canvas events={ptEvents()} />
+        <Canvas topology={topology()} lastTool={lastTool()} />
       </box>
       <box style={{ border: true, height: 3, padding: 0 }}>
         <input

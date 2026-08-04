@@ -5,6 +5,8 @@ import { expect, test, describe } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { Chat, shortToolName, type Turn } from "../src/tui/chat.tsx"
 import { Canvas } from "../src/tui/canvas.tsx"
+import type { Topology } from "../src/topology/model.ts"
+import { EMPTY } from "../src/topology/ingest.ts"
 
 async function frameOf(node: () => any, width = 70, height = 14): Promise<string> {
   const setup = await testRender(node, { width, height })
@@ -61,15 +63,51 @@ describe("Chat", () => {
 })
 
 describe("Canvas", () => {
-  test("dice que está vacío en vez de mostrar un panel mudo", async () => {
-    const frame = await frameOf(() => Canvas({ events: [] }))
+  const TOPO: Topology = {
+    devices: [
+      { name: "R1", model: "2911", x: 200, y: 90, ports: [
+        { name: "Gi0/1", ip: "192.168.0.1/255.255.255.0", linked: true },
+      ] },
+      { name: "SW1", model: "3560-24PS", x: 200, y: 230, ports: [
+        { name: "Gi0/1", linked: true },
+      ] },
+      { name: "PC1", model: "PC-PT", x: 70, y: 360, ports: [
+        { name: "Fa0", ip: "192.168.0.3/255.255.255.0", linked: true },
+      ] },
+    ],
+    links: [
+      { a: { device: "R1", port: "Gi0/1" }, b: { device: "SW1", port: "Gi0/1" }, wireless: false },
+      { a: { device: "SW1", port: "Fa0/1" }, b: { device: "PC1", port: "Fa0" }, wireless: false },
+    ],
+  }
+
+  test("invita a construir en vez de mostrar un panel mudo", async () => {
+    const frame = await frameOf(() => Canvas({ topology: EMPTY }))
     expect(frame).toContain("TOPOLOGÍA")
-    expect(frame).toContain("sin actividad")
+    expect(frame).toContain("pedile al agente")
   })
 
-  test("lista las tools de Packet Tracer que se ejecutaron", async () => {
-    const frame = await frameOf(() => Canvas({ events: ["mcp__packet-tracer__pt_full_build"] }))
+  test("dibuja la jerarquía router → switch → host", async () => {
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
+
+    expect(frame).toContain("R1")
+    expect(frame).toContain("SW1")
+    expect(frame).toContain("PC1")
+    // La sangría es lo que comunica la jerarquía: sin ella es una lista plana.
+    const rows = frame.split("\n")
+    const r1 = rows.findIndex((l) => l.includes("R1"))
+    const pc1 = rows.findIndex((l) => l.includes("PC1"))
+    expect(rows[pc1]!.indexOf("PC1")).toBeGreaterThan(rows[r1]!.indexOf("R1"))
+  })
+
+  test("muestra las IPs junto a cada equipo", async () => {
+    const frame = await frameOf(() => Canvas({ topology: TOPO }), 46, 14)
+    expect(frame).toContain("192.168.0.1")
+  })
+
+  test("resume el tamaño de la red y la última tool", async () => {
+    const frame = await frameOf(() => Canvas({ topology: TOPO, lastTool: "pt_full_build" }), 46, 14)
+    expect(frame).toContain("3 equipos")
     expect(frame).toContain("pt_full_build")
-    expect(frame).not.toContain("sin actividad")
   })
 })
