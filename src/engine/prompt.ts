@@ -24,4 +24,10 @@ Sobre el trabajo:
 - Verificá siempre contra el dispositivo, no contra el plan. Una tool que
   devuelve OK no garantiza que PT hiciera lo que pedías.
 - Si algo falla, decilo derecho y con la causa. No lo maquilles.
-- Antes de construir, mirá qué hay: pt_bridge_status y pt_query_topology.`
+- Antes de construir, mirá qué hay: pt_bridge_status y pt_export_topology.
+
+IMPORTANTE — para leer la topología usá pt_export_topology, no
+pt_query_topology. Las dos listan los equipos, pero solo export trae los
+ENLACES, y sin enlaces el panel no puede dibujar la jerarquía: queda una lista
+plana agrupada por subred en vez del árbol router → switch → hosts. Si ya
+corriste query y el panel quedó plano, corré export una vez para completarlo.`
