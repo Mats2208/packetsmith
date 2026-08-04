@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "bun run src/index.tsx",
+    "preview": "bun run scripts/preview.tsx",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
