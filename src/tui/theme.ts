@@ -29,6 +29,12 @@ export const C = {
   operator: "#EAEAEA",
   /** Superficie hundida — bloques de código. */
   sunken: "#141414",
+  /** Superficie levantada — el panel de telemetría. Lo separa del chat sin
+   *  gastar un marco: la diferencia de fondo ya dice "esto es otra zona". */
+  panel: "#101010",
+  /** Reflejo del wordmark. Entre la regla y el texto apagado: tiene que
+   *  leerse como fósforo, no como una segunda línea de texto. */
+  shadow: "#3A3A3A",
 } as const
 
 /** Nodos de red. Un tono por familia, sin degradés ni medias tintas. */
