@@ -5,12 +5,12 @@
   "license": "MIT",
   "author": "Mats2208",
   "type": "module",
-  "module": "src/index.ts",
+  "module": "src/index.tsx",
   "bin": {
-    "packetsmith": "src/index.ts"
+    "packetsmith": "src/index.tsx"
   },
   "scripts": {
-    "dev": "bun run src/index.ts",
+    "dev": "bun run src/index.tsx",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

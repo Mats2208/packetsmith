@@ -1,6 +1,10 @@
 #!/usr/bin/env bun
-// Punto de entrada. Por ahora solo reporta la versión: el TUI se monta acá
-// cuando el motor emita eventos (ver AGENTS.md, "Orden de trabajo").
-import pkg from "../package.json" with { type: "json" }
+import { render } from "@opentui/solid"
+import { getEngine } from "./engine/index.ts"
+import { App } from "./tui/app.tsx"
 
-console.log(`packetsmith ${pkg.version}`)
+// PACKETSMITH_ENGINE existe para poder probar otro motor sin recompilar nada.
+// Cuando haya más de uno, esto pasa a ser un flag de verdad.
+const engine = getEngine(process.env.PACKETSMITH_ENGINE ?? "claude")
+
+render(() => <App engine={engine} />)
