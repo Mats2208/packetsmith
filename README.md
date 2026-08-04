@@ -66,6 +66,23 @@ bun run src/index.tsx
 > process can hold it. If Claude Code, Cursor or Claude Desktop is running with that MCP
 > configured, close it first — otherwise every `pt_*` call answers *"no está conectado"*.
 
+### The plan-usage meter
+
+The status bar can show how much of your Claude plan you have burned (`5H ███████░ 84%`).
+That number is not in the CLI's output — it comes from Anthropic's own usage endpoint, which
+needs the OAuth token the `claude` CLI already stored when you logged in.
+
+So on first run PacketSmith reads it: from `~/.claude/.credentials.json`, or from the macOS
+Keychain, where macOS will ask your permission. **Say no and nothing breaks** — you keep the
+window's countdown (`5H ✓ 1h30`), which comes from the stream and costs nothing.
+
+The token is sent to `api.anthropic.com` and nowhere else. It is never stored, printed or
+logged. To skip the lookup entirely:
+
+```bash
+PACKETSMITH_NO_QUOTA=1 bun run src/index.tsx
+```
+
 ## This or the MCP?
 
 |  | [MCP-Packet-Tracer](https://github.com/Mats2208/MCP-Packet-Tracer) | PacketSmith |

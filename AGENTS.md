@@ -116,10 +116,23 @@ Before adding a mechanism, check whether the stream already reports it. Dump a r
 
 **Not in the stream:** the percentage of the plan's quota already consumed. `rate_limit_event`
 carries the window, its status and the reset time — enough for a countdown, not for a gauge.
-The percentage lives behind `GET https://api.anthropic.com/api/oauth/usage`, which needs the
-OAuth token: `~/.claude/.credentials.json` on Linux/Windows, the macOS Keychain otherwise.
-That is a credential read, so it stays opt-in and explicit — never something the app does
-quietly on startup.
+The percentage lives behind `GET https://api.anthropic.com/api/oauth/usage` (`src/engine/quota.ts`),
+which needs the OAuth token the CLI stored at login.
+
+Rules for that path, and they are not negotiable:
+
+- The token is read, sent to `api.anthropic.com`, and dropped. Never stored, printed or logged.
+- The cheap source is tried first (`~/.claude/.credentials.json`), then the macOS Keychain.
+  Reaching for the Keychain pops a system dialog, and popping one before exhausting the free
+  option is rude.
+- Denying the dialog is a supported outcome, not an error: the app falls back to the
+  countdown. Same if you never logged in. `PACKETSMITH_NO_QUOTA=1` skips the lookup entirely.
+- **Nothing under `test/` or `scripts/` may reach for it.** A test has no right to trigger a
+  system permission prompt — that is why `App` takes a `quota` prop, and why the preview
+  passes one.
+- The cache keeps the last good value on any failure and backs off for five minutes after a
+  429. Without it the meter vanished exactly when it mattered: near the cap is when you check
+  most and when the endpoint fails most.
 
 ## Two views of the same network, on purpose
 

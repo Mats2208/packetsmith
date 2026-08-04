@@ -1,6 +1,8 @@
 // Composición y estado. Acá vive el ciclo: input → sesión → eventos → UI.
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
+import { homedir } from "node:os"
 import type { Engine, Limits, Phase, Session, Usage } from "../engine/types.ts"
+import { pollQuota, type Quota } from "../engine/quota.ts"
 import type { Topology } from "../topology/model.ts"
 import { EMPTY, ingest } from "../topology/ingest.ts"
 import { Chat, shortToolName, type Turn } from "./chat.tsx"
@@ -95,7 +97,27 @@ export function limitChip(l: Limits, now = Date.now()): { text: string; fg: stri
   return { text: `${windowLabel(l.window)} ${mark}${left ? ` ${left}` : ""}`, fg }
 }
 
-export function App(props: { engine: Engine; model?: string; columns?: number }) {
+/**
+ * Color de un porcentaje consumido.
+ *
+ * Los umbrales son de decisión, no de estética: en 80 todavía te da para el
+ * turno que ibas a hacer, en 95 conviene guardar y esperar el reinicio. Debajo
+ * de 80 no hay nada que decidir, así que no lleva color.
+ */
+export function pctColor(pct: number): string {
+  if (pct >= 95) return C.alert
+  if (pct >= 80) return C.warn
+  return C.dim
+}
+
+export function App(props: {
+  engine: Engine
+  model?: string
+  /** Ancho de la terminal. Solo para preview y tests, que dibujan a un buffer. */
+  columns?: number
+  /** Cuota fija en vez de consultarla. Idem: evita tocar el Keychain. */
+  quota?: Quota
+}) {
   const [turns, setTurns] = createSignal<Turn[]>([])
   const [streaming, setStreaming] = createSignal("")
   const [busy, setBusy] = createSignal(false)
@@ -137,6 +159,20 @@ export function App(props: { engine: Engine; model?: string; columns?: number })
   onMount(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000)
     onCleanup(() => clearInterval(id))
+  })
+
+  // Porcentaje de plan consumido. No viene en el stream: hay que pedírselo a
+  // Anthropic con el token que el CLI ya guardó.
+  //
+  // Se apaga con PACKETSMITH_NO_QUOTA para quien no quiera que la app toque su
+  // Keychain, y con `props.quota` para el preview: montarlo abriría el diálogo
+  // de permisos del sistema, y un preview no tiene por qué pedirle permiso a
+  // nadie.
+  const [quota, setQuota] = createSignal<Quota | undefined>(props.quota)
+  onMount(() => {
+    if (props.quota || props.engine.name !== "claude" || process.env.PACKETSMITH_NO_QUOTA) return
+    const stop = pollQuota(homedir(), setQuota)
+    onCleanup(stop)
   })
 
   let session: Session | undefined
@@ -324,7 +360,7 @@ export function App(props: { engine: Engine; model?: string; columns?: number })
             { text: plural(topology().devices.length, "NODO") },
             { text: `$${cost().toFixed(4)}` },
           ]}
-          tail={<Budget usage={usage()} limits={limits()} now={now()} />}
+          tail={<Budget usage={usage()} limits={limits()} quota={quota()} now={now()} />}
         />
       </box>
 
@@ -348,21 +384,49 @@ export function App(props: { engine: Engine; model?: string; columns?: number })
  * datos ya venían en el stream del CLI —`usage` y `rate_limit_event`— sin que
  * hubiera que leer el token de OAuth ni pegarle a ningún endpoint aparte.
  */
-function Budget(props: { usage?: Usage; limits?: Limits; now: number }) {
-  const pct = () => (props.usage ? props.usage.tokens / props.usage.contextWindow : 0)
+function Budget(props: { usage?: Usage; limits?: Limits; quota?: Quota; now: number }) {
+  const ctx = () => (props.usage ? props.usage.tokens / props.usage.contextWindow : 0)
   const chip = () => (props.limits ? limitChip(props.limits, props.now) : undefined)
+  // La etiqueta de la ventana sale del stream; el porcentaje, del endpoint. Si
+  // el stream todavía no dijo cuál es la ventana, `5H` es la del plan estándar.
+  const win = () => (props.limits ? windowLabel(props.limits.window) : "5H")
 
   return (
     <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>
       <Show when={props.usage}>
         <text style={{ fg: C.rule }}>
           {"CTX "}
-          {bar(pct(), 8)}
-          <span style={{ fg: C.dim }}>{` ${Math.round(pct() * 100)}%`}</span>
+          {bar(ctx(), 8)}
+          <span style={{ fg: C.dim }}>{` ${Math.round(ctx() * 100)}%`}</span>
         </text>
       </Show>
-      <Show when={chip()}>
-        <text style={{ fg: chip()!.fg }}>{`   ${chip()!.text}`}</text>
+
+      {/* Con el porcentaje real, el medidor REEMPLAZA al chip de estado: dice
+          lo mismo y más. El chip vuelve solo si el endpoint no contestó. */}
+      <Show
+        when={props.quota?.session !== undefined}
+        fallback={
+          <Show when={chip()}>
+            <text style={{ fg: chip()!.fg }}>{`   ${chip()!.text}`}</text>
+          </Show>
+        }
+      >
+        <text style={{ fg: C.rule }}>
+          {`   ${win()} `}
+          {bar(props.quota!.session! / 100, 8)}
+          <span style={{ fg: pctColor(props.quota!.session!) }}>
+            {` ${Math.round(props.quota!.session!)}%`}
+          </span>
+        </text>
+        {/* La semanal va sin barra: es contexto, no la que te corta el turno. */}
+        <Show when={props.quota?.weekly !== undefined}>
+          <text style={{ fg: C.rule }}>
+            {"   7D "}
+            <span style={{ fg: pctColor(props.quota!.weekly!) }}>
+              {`${Math.round(props.quota!.weekly!)}%`}
+            </span>
+          </text>
+        </Show>
       </Show>
     </box>
   )

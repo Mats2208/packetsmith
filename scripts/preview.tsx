@@ -143,8 +143,16 @@ for (const [nombre, eventos] of Object.entries(ESCENAS)) {
   // `columns` va explícito: se renderiza a un buffer, no a la terminal, así que
   // `process.stdout.columns` mediría la ventana equivocada y el plano saldría
   // escalado a un ancho que no es el que se está dibujando.
+  //
+  // `quota` va fija por otra razón: consultarla de verdad abre el diálogo del
+  // Keychain, y un preview no tiene por qué pedirle permisos a nadie.
   const setup = await testRender(
-    () => App({ engine: fakeEngine(eventos), model: "opus-5", columns: ancho }),
+    () => App({
+      engine: fakeEngine(eventos),
+      model: "opus-5",
+      columns: ancho,
+      quota: { session: 84, weekly: 23 },
+    }),
     { width: ancho, height: alto },
   )
   // El App consume los eventos de forma asíncrona: sin esta pausa se captura la
