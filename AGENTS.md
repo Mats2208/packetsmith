@@ -51,6 +51,23 @@ panel derives the network topology from the `tool_end` events of `pt_*` calls.
 second server instance and the two would fight over the port. Everything the right panel
 needs already arrives in the agent's stream.
 
+### Known limitation: one MCP client at a time
+
+The same constraint bites from outside. If Claude Code (or Cursor, or Claude Desktop) is
+running with the Packet Tracer MCP configured, **it already owns `:54321`**. PacketSmith's
+agent then spawns its own MCP instance whose bridge cannot bind the port, and every `pt_*`
+call answers:
+
+```
+Packet Tracer no está conectado por ningún canal.
+```
+
+Measured, not guessed: two `packet_tracer_mcp` processes alive, one holding the port.
+
+This is not a bug we can fix here — it is how the MCP's HTTP bridge works. Close other MCP
+clients before using PacketSmith. When testing the topology pipeline while another client
+holds the port, use the fixture in `test/topology.test.ts` instead of a live export.
+
 ## Conventions
 
 - **Code comments in Spanish. Public docs (README, AGENTS.md, issues) in English.**
