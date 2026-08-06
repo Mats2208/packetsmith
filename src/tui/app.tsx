@@ -1,7 +1,11 @@
 // Composición y estado. Acá vive el ciclo: input → sesión → eventos → UI.
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
+import { useRenderer } from "@opentui/solid"
 import { homedir } from "node:os"
-import type { Engine, Limits, Phase, Session, Usage } from "../engine/types.ts"
+import { join } from "node:path"
+import { mkdirSync, writeFileSync } from "node:fs"
+import type { Effort, Engine, Limits, Phase, Session, Usage } from "../engine/types.ts"
+import { engines } from "../engine/index.ts"
 import { pollQuota, type Quota } from "../engine/quota.ts"
 import { isConfigured } from "../engine/mcp.ts"
 import type { Topology } from "../topology/model.ts"
@@ -10,8 +14,12 @@ import { Chat, shortToolName, type Turn } from "./chat.tsx"
 import { Canvas, WIDTH as PANEL_WIDTH } from "./canvas.tsx"
 import { Prompt } from "./prompt.tsx"
 import { Activity } from "./activity.tsx"
-import { C } from "./theme.ts"
+import { C, setTheme, theme } from "./theme.ts"
 import { Gauge, Hairline, Hud } from "./frame.tsx"
+import { dialog, hayDialogo, Picker, registrarPaleta } from "./picker.tsx"
+import { COMMANDS, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
+import { aplicarEfectos } from "./effects.ts"
+import { saveConfig } from "../config.ts"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
@@ -35,6 +43,31 @@ export function bridgeIsUp(output: unknown): boolean {
 
 /** Cada cuánto late el indicador de actividad, en milisegundos. */
 const BEAT_MS = 120
+
+/** Lo que se contesta cuando el CLI ya no está. `/clear` levanta uno nuevo. */
+const SESION_MUERTA =
+  "⚠ la sesión con el agente terminó. Probá `/clear` para levantar una nueva."
+
+/** La conversación y la red, en markdown, para `/export`. */
+export function transcripcion(turns: Turn[], topo: Topology): string {
+  const red = topo.devices.length
+    ? ["", "## Red", "", "| equipo | modelo | posición | direcciones |", "|---|---|---|---|",
+       ...topo.devices.map((d) =>
+         `| ${d.name} | ${d.model} | ${d.x},${d.y} | ` +
+         `${d.ports.filter((p) => p.ip).map((p) => p.ip!.split("/")[0]).join(", ") || "—"} |`),
+       "", `${topo.links.length} enlaces:`, "",
+       ...topo.links.map((l) =>
+         `- ${l.a.device}:${l.a.port}${l.b ? ` ↔ ${l.b.device}:${l.b.port}` : " ))) inalámbrico"}`)]
+    : []
+
+  return [
+    `# PacketSmith — ${new Date().toISOString()}`,
+    "",
+    ...turns.map((t) => `**${t.role === "user" ? "VOS" : "AGENTE"}**\n\n${t.text}\n`),
+    ...red,
+    "",
+  ].join("\n")
+}
 
 /**
  * Firma de la disposición de la red.
@@ -113,11 +146,16 @@ export function pctColor(pct: number): string {
 export function App(props: {
   engine: Engine
   model?: string
+  effort?: Effort
   /** Ancho de la terminal. Solo para preview y tests, que dibujan a un buffer. */
   columns?: number
   /** Cuota fija en vez de consultarla. Idem: evita tocar el Keychain. */
   quota?: Quota
 }) {
+  // El renderer hace falta para tres cosas que no son de dibujo: salir, copiar
+  // al portapapeles y encender los efectos. Se pide una vez acá porque solo se
+  // consigue desde adentro de un componente.
+  const renderer = useRenderer()
   const [turns, setTurns] = createSignal<Turn[]>([])
   const [streaming, setStreaming] = createSignal("")
   const [busy, setBusy] = createSignal(false)
@@ -175,7 +213,23 @@ export function App(props: {
     onCleanup(stop)
   })
 
+  // Lo que se le pide al motor. Son señales porque `/model` y `/effort` las
+  // cambian en caliente, y la cabecera tiene que reflejarlo enseguida.
+  const [modelPedido, setModelPedido] = createSignal(props.model)
+  const [effort, setEffort] = createSignal<Effort>(props.effort ?? "medium")
+  const [sessionId, setSessionId] = createSignal("")
+  const [efectosOn, setEfectosOn] = createSignal(false)
+  // Lee el campo de escritura EN EL MOMENTO. Lo pone `Prompt` al montarse. La
+  // paleta lo consulta para saber si una `/` abre la lista o es solo una barra
+  // en el medio de una frase; una señal actualizada por `onContentChange`
+  // llegaba tarde, porque ese evento se dispara al terminar el lote de entrada.
+  let leerBorrador: () => string = () => ""
+
   let session: Session | undefined
+  // Generación de la sesión. Al cambiar de modelo se levanta un proceso nuevo y
+  // el viejo todavía tiene su iterador andando: sin esto, su evento de cierre
+  // llegaba como un error del agente y ensuciaba el chat de la sesión nueva.
+  let generacion = 0
   // Disposición del último plano dibujado, para no repetirlo turno tras turno.
   let mapped = ""
   // Si el MCP está registrado. Se mira UNA vez, al arrancar: es config del
@@ -201,18 +255,39 @@ export function App(props: {
     onCleanup(() => void process.stdout.off("resize", onResize))
   })
 
-  onMount(() => {
-    session = props.engine.start({ model: props.model })
-    void consume(session)
-  })
+  /**
+   * Levanta una sesión. Con `resume` conserva la conversación anterior.
+   *
+   * Es lo que hace que cambiar de modelo no cueste el contexto: el modelo y el
+   * esfuerzo son argumentos de arranque del CLI, así que no se pueden cambiar
+   * en vivo, pero `--resume` deja levantar otro proceso sobre la misma sesión.
+   * Verificado contra el CLI real: con haiku se le da un dato, se relanza con
+   * sonnet, y lo recuerda.
+   */
+  function arrancar(resume?: string) {
+    session?.close()
+    const mia = ++generacion
+    const s = props.engine.start({
+      model: modelPedido(),
+      effort: effort(),
+      ...(resume ? { resume } : {}),
+    })
+    session = s
+    void consume(s, mia)
+  }
+
+  onMount(() => arrancar())
   onCleanup(() => session?.close())
 
-  async function consume(s: Session) {
+  async function consume(s: Session, mia: number) {
     for await (const ev of s.events()) {
+      // Los eventos de una sesión que ya reemplazamos se descartan.
+      if (mia !== generacion) continue
       switch (ev.type) {
         case "ready":
           setModel(ev.model)
           setToolCount(ev.tools.length)
+          setSessionId(ev.sessionId)
           break
 
         case "phase":
@@ -309,8 +384,107 @@ export function App(props: {
     }
   }
 
+  /** Una respuesta de la app, sin gastar un turno del agente. */
+  const decir = (text: string) => setTurns((t) => [...t, { role: "agent", text }])
+
+  // El contexto que reciben los comandos. Es una interfaz y no la app entera a
+  // propósito: así `commands.ts` se testea sin montar nada.
+  const ctx: CommandCtx = {
+    decir,
+    pedir(texto, etiqueta) {
+      setTurns((t) => [...t, { role: "user", text: etiqueta }])
+      if (!session?.send(texto)) { decir(SESION_MUERTA); return }
+      setBusy(true)
+      setStreaming("")
+      setStartedAt(Date.now())
+      setElapsed(0)
+      setPhase("requesting")
+    },
+    reiniciar(cambios) {
+      if (cambios.model) setModelPedido(cambios.model)
+      if (cambios.effort) setEffort(cambios.effort)
+      // Se guarda lo elegido: si tuviste que entrar acá a cambiarlo, la próxima
+      // vez lo vas a querer igual.
+      saveConfig({ model: modelPedido(), effort: effort() })
+      // Se reanuda si ya hubo sesión: cambiar de modelo no tiene por qué
+      // costarte la conversación.
+      arrancar(sessionId() || undefined)
+      decir(`Modelo **${modelPedido() ?? "por defecto"}**, esfuerzo **${effort()}**.` +
+        (sessionId() ? " La conversación sigue." : ""))
+    },
+    limpiar() {
+      setTurns([])
+      setTopology(EMPTY)
+      setStreaming("")
+      setLive([])
+      setCost(0)
+      setUsage(undefined)
+      setSessionId("")
+      mapped = ""
+      arrancar()
+    },
+    salir: () => renderer?.destroy(),
+    // OSC52: el terminal copia por vos, así que anda igual sobre SSH. Devuelve
+    // false solo, sin excepción, cuando el terminal no lo soporta.
+    copiar: (texto) => renderer?.copyToClipboardOSC52(texto) ?? false,
+    exportar() {
+      const dir = join(homedir(), ".packetsmith")
+      mkdirSync(dir, { recursive: true })
+      // El nombre lleva la marca de tiempo para no pisar el anterior: exportar
+      // dos veces y quedarse con una sola sería la peor sorpresa posible.
+      const ruta = join(dir, `sesion-${new Date().toISOString().replace(/[:.]/g, "-")}.md`)
+      writeFileSync(ruta, transcripcion(turns(), topology()))
+      return ruta
+    },
+    // El tema NO se guarda al previsualizar, solo al confirmar: si no, salir
+    // con Esc te dejaba guardado el que estabas mirando de paso.
+    tema: {
+      actual: () => theme().name,
+      poner: (n) => void setTheme(n),
+      confirmar: (n) => { setTheme(n); saveConfig({ theme: n }) },
+    },
+    efectos: {
+      activos: efectosOn,
+      alternar() {
+        const nuevo = renderer ? aplicarEfectos(renderer, !efectosOn()) : false
+        setEfectosOn(nuevo)
+        return nuevo
+      },
+    },
+    estado: () => ({
+      engine: props.engine.name,
+      model: model(),
+      effort: effort(),
+      sessionId: sessionId(),
+      motor: props.engine.describe?.() ?? {},
+      mcp: mcpReady,
+      bridge: bridgeLive(),
+      nodos: topology().devices.length,
+      enlaces: topology().links.length,
+      turnos: turns().length,
+      costoUsd: cost(),
+      ultimaRespuesta: [...turns()].reverse().find((t) => t.role === "agent")?.text ?? "",
+      motores: Object.keys(engines),
+    }),
+  }
+
+  // La paleta la arma la app porque los comandos son suyos; `picker.tsx` solo
+  // sabe dibujar una lista y atender el teclado.
+  registrarPaleta(() => dialog.abrir({
+    titulo: "comandos",
+    prefijo: "/",
+    opciones: opcionesDeComandos(),
+    onElegir: (o) => findCommand(o.value)?.run(ctx),
+  }))
+
   function submit(text: string) {
     if (!session) return
+
+    // Un `/comando` tipeado entero también corre, sin pasar por la lista: es
+    // más rápido cuando ya sabés cuál querés.
+    const directo = COMMANDS.find((c) => c.title === text.trim().split(/\s+/)[0])
+    if (directo) { directo.run(ctx); return }
+
     setTurns((t) => [...t, { role: "user", text }])
 
     // Si el CLI ya murió, el mensaje no llega a ningún lado. Antes se mandaba
@@ -318,13 +492,7 @@ export function App(props: {
     // ponía en "trabajando", y se quedaba así para siempre: sin eventos que
     // esperar, nada volvía a poner `busy` en falso y el campo de escritura
     // quedaba bloqueado. Decirlo y no bloquear nada es todo lo que hace falta.
-    if (!session.send(text)) {
-      setTurns((t) => [...t, {
-        role: "agent",
-        text: "⚠ la sesión con el agente terminó. Reiniciá PacketSmith para seguir.",
-      }])
-      return
-    }
+    if (!session.send(text)) { decir(SESION_MUERTA); return }
 
     setBusy(true)
     setStreaming("")
@@ -404,13 +572,20 @@ export function App(props: {
         />
       </box>
 
+      {/* La paleta va ENTRE la barra de estado y el campo de escritura: queda
+          justo sobre el cursor, que es donde el ojo ya está. No puede ir
+          después de un scrollbox — en esta versión de OpenTUI el scrollbox se
+          queda con todo el alto que sobra y lo de después nunca se dibuja. */}
+      <Picker draftVacio={() => !leerBorrador().trim()} />
+
       {/* Los atajos NO van acá: los enseña la pantalla de arranque, que es
           donde uno los lee. Repetirlos en el placeholder los convierte en
           ruido permanente en la línea donde se escribe. */}
       <Prompt
         busy={busy()}
-        placeholder={busy() ? "el agente está trabajando…" : "describí la red que querés"}
+        placeholder={busy() ? "el agente está trabajando…" : "describí la red que querés  ·  / para comandos"}
         onSubmit={submit}
+        onReady={(leer) => (leerBorrador = leer)}
       />
     </box>
   )

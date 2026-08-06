@@ -12,6 +12,8 @@ import { existsSync, mkdirSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { isConfigured } from "../src/engine/mcp.ts"
+import { rgb } from "../src/tui/contrast.ts"
+import { DEFAULT_THEME, findTheme } from "../src/tui/themes.ts"
 
 const REPO = "https://github.com/Mats2208/MCP-Packet-Tracer"
 const HOME = homedir()
@@ -22,13 +24,31 @@ const PTS = join(DEST, "MCP-Control-Center.pts")
 const DRY = process.argv.includes("--dry-run")
 const YES = process.argv.includes("--yes")
 
+/**
+ * Los colores, derivados del tema por defecto en vez de copiados a mano.
+ *
+ * Antes había acá una segunda paleta escrita como escapes ANSI crudos
+ * (`\x1b[38;2;234;234;234m`), que es lo mismo que `C.fg` dicho de otra forma.
+ * Dos copias del mismo dato se despegan sola la primera vez que alguien toca
+ * una: el instalador seguiría pintando con los colores de la versión anterior y
+ * nadie se enteraría.
+ *
+ * Esto es ANSI y no OpenTUI porque el instalador escribe a una terminal común,
+ * sin renderer: acá no hay dónde poner un `<text>`.
+ */
+const ansi = (hex: string) => (s: string) => {
+  const [r, g, b] = rgb(hex)
+  return `\x1b[38;2;${r};${g};${b}m${s}\x1b[0m`
+}
+
+const P = findTheme(DEFAULT_THEME)!.colors
 const c = {
-  t: (s: string) => `\x1b[38;2;234;234;234m${s}\x1b[0m`,
-  d: (s: string) => `\x1b[38;2;107;107;107m${s}\x1b[0m`,
-  b: (s: string) => `\x1b[38;2;56;189;248m${s}\x1b[0m`,
-  ok: (s: string) => `\x1b[38;2;74;246;38m${s}\x1b[0m`,
-  no: (s: string) => `\x1b[38;2;230;25;25m${s}\x1b[0m`,
-  w: (s: string) => `\x1b[38;2;217;119;6m${s}\x1b[0m`,
+  t: ansi(P.fg),
+  d: ansi(P.dim),
+  b: ansi(P.brand),
+  ok: ansi(P.live),
+  no: ansi(P.alert),
+  w: ansi(P.warn),
 }
 
 /** Corre un comando y devuelve si salió bien. En dry-run solo lo imprime. */

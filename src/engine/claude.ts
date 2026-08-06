@@ -256,6 +256,17 @@ function userMessage(text: string): string {
 export const claude: Engine = {
   name: "claude",
 
+  describe() {
+    const mcp = scopeToPacketTracer(homedir(), process.cwd())
+    // El temporal se borra enseguida: acá solo interesa SI se encontró la
+    // config del MCP, no dejar un archivo suelto por haber preguntado.
+    if (mcp.path) try { unlinkSync(mcp.path) } catch { /* ya no estaba */ }
+    return {
+      binario: resolveBin(),
+      "MCP acotado": mcp.args.length ? "sí" : "no — hereda toda la config",
+    }
+  },
+
   start(opts: StartOpts): Session {
     const cwd = opts.cwd ?? process.cwd()
     const mcp = scopeToPacketTracer(homedir(), cwd)

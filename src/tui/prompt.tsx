@@ -79,6 +79,17 @@ export function Prompt(props: {
   busy: boolean
   placeholder: string
   onSubmit: (text: string) => void
+  /**
+   * Entrega una forma de leer el borrador EN EL MOMENTO.
+   *
+   * La necesita la paleta de comandos: `/` solo abre la lista si el campo está
+   * vacío, porque en el medio de una frase una barra es una barra. Y tiene que
+   * ser una lectura sincrónica, no una señal que se actualice después: medido,
+   * `onContentChange` se dispara una vez terminado el lote de entrada y siempre
+   * con el texto final, así que una señal alimentada desde ahí llega tarde
+   * justo cuando hay que decidir.
+   */
+  onReady?: (leerBorrador: () => string) => void
 }) {
   const [rows, setRows] = createSignal(1)
   let area: TextareaRenderable | undefined
@@ -118,7 +129,10 @@ export function Prompt(props: {
     >
       <box style={{ flexGrow: 1, height: rows(), marginLeft: 1 }}>
         <textarea
-          ref={(r: TextareaRenderable) => (area = r)}
+          ref={(r: TextareaRenderable) => {
+            area = r
+            props.onReady?.(() => area?.plainText ?? "")
+          }}
           focused
           wrapMode="word"
           keyBindings={KEYS}

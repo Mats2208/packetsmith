@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OpenTUI](https://img.shields.io/badge/OpenTUI-Solid-4051B5?style=flat-square)](https://github.com/sst/opentui)
 [![MCP](https://img.shields.io/badge/protocol-MCP-00B4D8?style=flat-square)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-196%20passing-3fb950?style=flat-square)](test/)
+[![Tests](https://img.shields.io/badge/tests-262%20passing-3fb950?style=flat-square)](test/)
 [![License](https://img.shields.io/github/license/Mats2208/packetsmith?style=flat-square&color=green)](LICENSE)
 
 <br/>
@@ -20,7 +20,7 @@
 <td align="center"><strong>Live topology</strong><br/><sub>tree + canvas plan</sub></td>
 <td align="center"><strong>Real verification</strong><br/><sub>pings, not promises</sub></td>
 <td align="center"><strong>Plan + context meters</strong><br/><sub>know what you're burning</sub></td>
-<td align="center"><strong>196 tests</strong><br/><sub>UI included</sub></td>
+<td align="center"><strong>262 tests</strong><br/><sub>UI included</sub></td>
 </tr>
 </table>
 
@@ -67,6 +67,35 @@ PacketSmith **does not implement an agent**. It wraps one you already have — [
 | **Activity** | phase, reasoning tokens, clock | `◐ RAZONANDO · 2.5k tok · 1m12s` |
 | **Budget** | context window and plan quota | `CTX ██░░░░░░ 18% · 5H ███░░░░░ 23%` |
 | **Timing** | where a turn actually went | `⏱ 2m40s · 34s en packet tracer (21%) · 2m06s en el modelo` |
+| **Commands** | everything you can pick, behind `/` | `/model` `/effort` `/theme` `/topology` `/export` |
+
+## Commands
+
+Press <kbd>/</kbd> on an empty prompt — or <kbd>Ctrl</kbd>+<kbd>P</kbd> at any time — and
+filter as you type. Nothing here needs a restart.
+
+| | |
+|---|---|
+| `/model` `/effort` | switch model or reasoning effort **without losing the conversation** — the process relaunches on the same session id |
+| `/theme` | 13 palettes, previewed live as you scroll, reverted if you press Esc |
+| `/effects` | CRT scanlines and vignette, off by default |
+| `/topology` `/bridge` | re-read Packet Tracer, check the bridge |
+| `/copy` `/export` `/debug` `/mcp` `/clear` `/help` | the rest |
+
+What you pick with `/theme`, `/model` and `/effort` is remembered in `~/.packetsmith/config.json`.
+
+### Contrast is a test, not a promise
+
+Every colour has a **role** — primary text, secondary, tertiary, chrome, wire, status — and
+each role declares the contrast ratio it must clear against all three surfaces. `bun test`
+audits all 13 themes and fails the build if one falls short.
+
+That is not decoration. The original palette drew the device model, the interface names, the
+`⏱` line and the whole first-run screen at **1.38:1** — one colour was doing chrome and text
+at the same time. The well-known palettes here are *adapted*, not copied: hue and saturation
+are kept and lightness is pushed until the role's minimum is met. Where that would have
+wrecked the colour, the background was darkened instead; where even that fell short, the
+theme's comment says so.
 
 **Why the topology is drawn instead of screenshotted:** a rendered tree works in every terminal, shows state a bitmap cannot (IPs, links, port status), and can be navigated. The real Packet Tracer capture stays one `pt_screenshot` away.
 
@@ -176,7 +205,7 @@ Every `pt_*` call is one HTTP round-trip to Packet Tracer, strictly serial — `
 ## Development
 
 ```bash
-bun test          # 196 tests — engine, topology and rendered UI frames
+bun test          # 262 tests — engine, topology and rendered UI frames
 bun run typecheck
 bun run preview   # print the UI in fixed states, without an agent or Packet Tracer
 bun run shots     # regenerate the README screenshots from the source

@@ -106,4 +106,13 @@ export interface Session {
 export interface Engine {
   readonly name: string
   start(opts: StartOpts): Session
+  /**
+   * Datos de diagnóstico para `/debug`, si el motor tiene algo que decir.
+   *
+   * Existe porque el fallo más caro de este proyecto fue invisible: en Windows
+   * el CLI se lanzaba a través de un shim que se comía media línea de comandos,
+   * y no había forma de ver con qué binario ni con qué argumentos había
+   * arrancado. Cada motor sabe qué de lo suyo vale la pena mirar.
+   */
+  describe?(): Record<string, string>
 }

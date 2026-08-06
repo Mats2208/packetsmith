@@ -16,6 +16,16 @@ import { Gauge, Plate, SPLIT } from "./frame.tsx"
 
 /** Columna donde arranca la IP. Fija: es lo que mantiene la grilla a plomo. */
 const IP_COL = 22
+
+/**
+ * Recorta a la columna dejando SIEMPRE un espacio antes de lo que sigue.
+ *
+ * Con `padEnd(IP_COL).slice(0, IP_COL)` a secas, un nombre que mide exactamente
+ * la columna se pega al valor de al lado: `GigabitEthernet0/0` son 18 más los 4
+ * de sangría, o sea 22 justos, y en el panel salía
+ * `GigabitEthernet0/0192.168.0.1`. Visto contra un equipo real, no inventado.
+ */
+const columna = (s: string) => s.slice(0, IP_COL - 1).padEnd(IP_COL)
 /** Ancho del panel. Fijo a propósito: la telemetría no se reflowea. */
 export const WIDTH = 42
 /** Lo que queda adentro después del filete y los márgenes. */
@@ -109,13 +119,13 @@ function Devices(props: { topology: Topology }) {
       {(d) => (
         <>
           <text style={{ fg: NODE[kindOf(d.model)] ?? NODE.other }}>
-            {`${ICON[kindOf(d.model)]} ${d.name}`.padEnd(IP_COL).slice(0, IP_COL)}
+            {columna(`${ICON[kindOf(d.model)]} ${d.name}`)}
             <span style={{ fg: C.dim }}>{d.model.slice(0, INNER - IP_COL)}</span>
           </text>
           <For each={d.ports.filter((p) => p.ip)}>
             {(p) => (
               <text style={{ fg: C.dim }}>
-                {`    ${p.name}`.padEnd(IP_COL).slice(0, IP_COL)}
+                {columna(`    ${p.name}`)}
                 <span style={{ fg: C.dim }}>{p.ip!.split("/")[0]}</span>
               </text>
             )}

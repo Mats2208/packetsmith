@@ -505,6 +505,19 @@ describe("pantalla de bienvenida", () => {
     expect(on).not.toContain("MCP BUILDER")
   })
 
+  test("en una terminal baja los renglones no se pisan", async () => {
+    // Bug real y de los peores, porque afectaba a la PRIMERA pantalla: sin un
+    // alto declarado por renglón, el flex apretaba la caja cuando faltaba
+    // altura y los textos se dibujaban uno encima del otro. Salía
+    // "elspanelgdetla─derechatserdibuja solo", que no es una errata sino dos
+    // renglones superpuestos.
+    const frame = await frameOf(
+      () => Chat({ turns: [], streaming: "", busy: false, live: false }), 76, 22)
+    expect(frame).toContain("el panel de la derecha se dibuja solo")
+    expect(frame).toContain("vos ─▶ agente ─▶ packet tracer")
+    expect(frame).toContain("leé la topología y decime qué está mal")
+  })
+
   test("desaparece al primer mensaje", async () => {
     // Una portada permanente robaría las filas que el chat necesita.
     const used = await frameOf(

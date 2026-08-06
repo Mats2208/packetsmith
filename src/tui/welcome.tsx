@@ -65,14 +65,22 @@ export function Welcome(props: {
         title=" CÓMO EMPIEZA "
         titleAlignment="center"
       >
-        <text style={{ fg: C.dim }}>
+        {/* Cada renglón declara su alto y se niega a encogerse.
+            Sin eso, en una terminal baja el flex apretaba la caja y los
+            renglones se dibujaban UNO ENCIMA DEL OTRO: la primera pantalla
+            salía como "elspanelgdetla─derechatserdibuja solo". Es la misma
+            trampa que ya está anotada para el arte multilínea, y muerde igual
+            con texto común. */}
+        <text style={{ fg: C.dim, height: 1, flexShrink: 0 }}>
           {"vos "}
           <span style={{ fg: C.faint }}>{"─▶"}</span>
           {" agente "}
           <span style={{ fg: C.faint }}>{"─▶"}</span>
           {" packet tracer"}
         </text>
-        <text style={{ fg: C.brand }}>{"el panel de la derecha se dibuja solo"}</text>
+        <text style={{ fg: C.brand, height: 1, flexShrink: 0 }}>
+          {"el panel de la derecha se dibuja solo"}
+        </text>
 
         {/* Los separadores se dibujan con un borde y no con `─`.repeat(n):
             repetir obliga a saber el ancho, y el ancho acá es elástico. */}
@@ -80,10 +88,10 @@ export function Welcome(props: {
         <Hairline />
         <box style={{ height: 1 }} />
 
-        <text style={{ fg: C.fg }}>{"PROBÁ CON"}</text>
+        <text style={{ fg: C.fg, height: 1, flexShrink: 0 }}>{"PROBÁ CON"}</text>
         <For each={EJEMPLOS}>
           {(e) => (
-            <text style={{ fg: C.faint }}>
+            <text style={{ fg: C.faint, height: 1, flexShrink: 0 }}>
               {"  › "}
               <span style={{ fg: C.dim }}>{e}</span>
             </text>

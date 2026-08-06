@@ -252,14 +252,32 @@ Adding an engine is one file plus one line in `src/engine/index.ts`. The contrac
 
 ```ts
 interface Engine {
-  name: string
-  run(opts: RunOpts): AsyncIterable<AgentEvent>
+  readonly name: string
+  start(opts: StartOpts): Session
+  describe?(): Record<string, string>   // shown by /debug
+}
+
+interface Session {
+  send(text: string): boolean           // false = the CLI is gone
+  events(): AsyncIterable<AgentEvent>
+  close(): void
 }
 ```
 
-It **must** be an `AsyncIterable`, not a promise of the final result. If an adapter collects
-everything and yields at the end, the right panel cannot react while the agent works — and
-that is the feature.
+Two things are load-bearing.
+
+`events()` **must** be an `AsyncIterable`, not a promise of the final result. If an adapter
+collects everything and yields at the end, the right panel cannot react while the agent
+works — and that is the feature.
+
+`send` returns whether the message got anywhere. Writing to the stdin of a dead process
+does **not** throw — measured — so without that boolean the message vanishes, the UI waits
+for a reply that will never come, and the app locks with the input field disabled.
+
+`StartOpts` carries `model`, `effort` and `resume`. `resume` is what makes `/model` worth
+having: the model is a launch argument, so it cannot change in place, but relaunching the
+process on the same session id keeps the conversation. Verified against the real CLI —
+give haiku a fact, relaunch with sonnet, it still remembers.
 
 Each CLI has its own output format and its own quirks. Say which engine you tested with;
 they do not behave the same.
