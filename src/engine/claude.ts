@@ -42,6 +42,10 @@ export function buildArgs(opts: StartOpts & { mcpArgs?: string[] }): string[] {
   // del usuario, y sus definiciones de tools viajan en cada pedido.
   if (opts.mcpArgs?.length) args.push(...opts.mcpArgs)
   if (opts.model) args.push("--model", opts.model)
+  if (opts.effort) args.push("--effort", opts.effort)
+  // Reanudar una conversación anterior. Es lo que hace que cambiar de modelo no
+  // cueste el contexto: se relanza el proceso sobre la misma sesión.
+  if (opts.resume) args.push("--resume", opts.resume)
   if (opts.allowedTools) {
     // Lista vacía = "sin ninguna tool", pero el flag igual necesita un valor:
     // `--allowedTools` a secas hace que el CLI aborte con "argument missing".

@@ -58,7 +58,7 @@ export function Activity(props: {
 
   return (
     <box style={{ flexDirection: "row", height: 1 }}>
-      <text style={{ fg: busy() ? C.fg : C.rule, flexShrink: 0 }}>
+      <text style={{ fg: busy() ? C.fg : C.faint, flexShrink: 0 }}>
         {`${glyph()} ${props.phase === "tool" && props.detail ? props.detail : LABEL[props.phase]}`}
       </text>
       {/* Los tokens de razonamiento son la prueba de que algo pasa cuando no
@@ -70,7 +70,7 @@ export function Activity(props: {
           está en vuelo y no volvió ni un token. El barrido ocupa ese hueco con
           movimiento, que es la única información que hay para dar. */}
       <Show when={props.phase === "requesting"}>
-        <text style={{ fg: C.rule, flexShrink: 0 }}>{`  ${sweep(12, props.beat)}`}</text>
+        <text style={{ fg: C.faint, flexShrink: 0 }}>{`  ${sweep(12, props.beat)}`}</text>
       </Show>
       <Show when={busy() && props.elapsedMs}>
         <text style={{ fg: C.dim, flexShrink: 0 }}>{`  ${clock(props.elapsedMs!)}`}</text>

@@ -57,7 +57,7 @@ export function Welcome(props: {
           width: WIDTH,
           maxWidth: "100%",
           border: true,
-          borderColor: C.rule,
+          borderColor: C.line,
           paddingLeft: 2,
           paddingRight: 2,
           flexShrink: 1,
@@ -67,9 +67,9 @@ export function Welcome(props: {
       >
         <text style={{ fg: C.dim }}>
           {"vos "}
-          <span style={{ fg: C.rule }}>{"─▶"}</span>
+          <span style={{ fg: C.faint }}>{"─▶"}</span>
           {" agente "}
-          <span style={{ fg: C.rule }}>{"─▶"}</span>
+          <span style={{ fg: C.faint }}>{"─▶"}</span>
           {" packet tracer"}
         </text>
         <text style={{ fg: C.brand }}>{"el panel de la derecha se dibuja solo"}</text>
@@ -83,7 +83,7 @@ export function Welcome(props: {
         <text style={{ fg: C.fg }}>{"PROBÁ CON"}</text>
         <For each={EJEMPLOS}>
           {(e) => (
-            <text style={{ fg: C.rule }}>
+            <text style={{ fg: C.faint }}>
               {"  › "}
               <span style={{ fg: C.dim }}>{e}</span>
             </text>
@@ -105,7 +105,7 @@ export function Welcome(props: {
           <Show
             when={props.mcp === false}
             fallback={
-              <text style={{ fg: props.live ? C.live : C.rule, flexShrink: 0 }}>
+              <text style={{ fg: props.live ? C.live : C.dim, flexShrink: 0 }}>
                 {props.live ? "● packet tracer conectado" : "○ packet tracer sin conexión"}
               </text>
             }
@@ -116,15 +116,15 @@ export function Welcome(props: {
               elástico se colapsa a cero y los dos textos se pegan
               ("conectado⏎ enviar"). Dos columnas siempre. */}
           <box style={{ flexGrow: 1, minWidth: 2 }} />
-          <text style={{ fg: C.rule, flexShrink: 0 }}>{"⏎ enviar · ⇧⏎ línea"}</text>
+          <text style={{ fg: C.dim, flexShrink: 0 }}>{"⏎ enviar · ⇧⏎ línea"}</text>
         </box>
         <Show when={props.mcp === false}>
-          <text style={{ fg: C.rule }}>
+          <text style={{ fg: C.dim }}>
             {"  claude mcp add packet-tracer -- <python> -m packet_tracer_mcp --stdio"}
           </text>
         </Show>
         <Show when={props.mcp !== false && !props.live}>
-          <text style={{ fg: C.rule }}>{"  abrí Extensiones ▸ MCP BUILDER en Packet Tracer"}</text>
+          <text style={{ fg: C.dim }}>{"  abrí Extensiones ▸ MCP BUILDER en Packet Tracer"}</text>
         </Show>
       </box>
     </box>

@@ -3,10 +3,23 @@
 
 export interface StartOpts {
   model?: string
+  /** Cuánto razona el agente antes de contestar. */
+  effort?: Effort
+  /**
+   * Id de una sesión anterior a reanudar.
+   *
+   * Es lo que permite cambiar de modelo o de esfuerzo sin empezar de cero: se
+   * cierra el proceso y se levanta otro sobre la MISMA conversación.
+   */
+  resume?: string
   /** Lista blanca de tools. `undefined` = las que el CLI traiga por defecto. */
   allowedTools?: string[]
   cwd?: string
 }
+
+/** Niveles de esfuerzo que acepta el CLI. Verificado contra `claude --help`. */
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const
+export type Effort = (typeof EFFORTS)[number]
 
 /**
  * En qué anda el agente ahora mismo.

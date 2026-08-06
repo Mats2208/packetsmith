@@ -32,16 +32,21 @@ export interface Turn {
 /**
  * Tono de cada tipo de celda del plano.
  *
- * Los cables van en `wire` y no en `rule`: un filete puede permitirse ser casi
- * invisible porque su trabajo es separar, pero un cable es DATO. Dibujados en
- * `rule` sobre el fondo casi-negro el plano se veía como nodos flotando sin
+ * Los cables van en `wire` y no en `line`: un filete puede permitirse ser casi
+ * invisible porque su trabajo es separar, pero un cable es DATO. Dibujados como
+ * filete sobre el fondo casi-negro, el plano se veía como nodos flotando sin
  * ninguna conexión entre ellos.
+ *
+ * Es una FUNCIÓN y no una constante, y ahí está el detalle que importa: una
+ * constante de módulo se evalúa al importar el archivo y se queda con los
+ * colores del tema que estuviera activo en ese momento. Cambiar de tema después
+ * no la tocaba, así que el plano seguía dibujado con la paleta vieja.
  */
-const INK: Record<Ink, string> = {
+const ink = (): Record<Ink, string> => ({
   node: C.fg,
   link: C.wire,
   label: C.dim,
-}
+})
 
 /**
  * El plano de la red, con las coordenadas reales del canvas de Packet Tracer.
@@ -74,7 +79,7 @@ function MapBlock(props: { topology: Topology; width: number }) {
           marginTop: 1,
           flexShrink: 0,
           border: true,
-          borderColor: C.rule,
+          borderColor: C.line,
         }}
         title=" PLANO · CANVAS DE PT "
         titleAlignment="center"
@@ -83,7 +88,7 @@ function MapBlock(props: { topology: Topology; width: number }) {
           {(spans) => (
             <box style={{ flexDirection: "row", height: 1 }}>
               <For each={spans}>
-                {(s) => <text style={{ fg: INK[s.ink] }}>{s.text}</text>}
+                {(s) => <text style={{ fg: ink()[s.ink] }}>{s.text}</text>}
               </For>
             </box>
           )}
@@ -261,7 +266,7 @@ function Table(props: { rows: string[][]; width?: number }) {
   return (
     <>
       <text style={{ fg: C.fg }}>{line(props.rows[0] ?? [])}</text>
-      <text style={{ fg: C.rule }}>
+      <text style={{ fg: C.line }}>
         {"  " + "─".repeat(widths().reduce((a, b) => a + b, 0) + 2 * (widths().length - 1))}
       </text>
       <For each={props.rows.slice(1)}>
@@ -390,7 +395,7 @@ function Body(props: { text: string; width?: number }) {
           case "head":
             return <text style={{ fg: C.fg }}>{`── ${p.text.toUpperCase()}`}</text>
           case "rule":
-            return <text style={{ fg: C.rule }}>{"  " + "─".repeat(28)}</text>
+            return <text style={{ fg: C.line }}>{"  " + "─".repeat(28)}</text>
           case "table":
             return <Table rows={p.rows} width={props.width} />
           case "row":
@@ -423,10 +428,10 @@ function Block(props: { role: Turn["role"]; children: any }) {
         paddingLeft: 1,
         border: ["left"],
         customBorderChars: GUTTER,
-        borderColor: mine() ? C.fg : C.rule,
+        borderColor: mine() ? C.fg : C.faint,
       }}
     >
-      <text style={{ fg: mine() ? C.operator : C.dim }}>{mine() ? "VOS" : "AGENTE"}</text>
+      <text style={{ fg: mine() ? C.fg : C.dim }}>{mine() ? "VOS" : "AGENTE"}</text>
       {props.children}
     </box>
   )
@@ -463,7 +468,7 @@ export function Chat(props: {
         <scrollbox
           style={{ flexGrow: 1 }}
           verticalScrollbarOptions={{
-            trackOptions: { backgroundColor: C.bg, foregroundColor: C.rule },
+            trackOptions: { backgroundColor: C.bg, foregroundColor: C.line },
           }}
         >
           <For each={props.turns}>
@@ -476,7 +481,7 @@ export function Chat(props: {
                   <Tools tools={turn.tools!} />
                 </Show>
                 <Show when={turn.timing}>
-                  <text style={{ fg: C.rule }}>{timingLine(turn.timing!)}</text>
+                  <text style={{ fg: C.dim }}>{timingLine(turn.timing!)}</text>
                   <box style={{ height: 1 }} />
                 </Show>
                 <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>

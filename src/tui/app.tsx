@@ -434,7 +434,7 @@ function Budget(props: { usage?: Usage; limits?: Limits; quota?: Quota; now: num
   return (
     <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>
       <Show when={props.usage}>
-        <text style={{ fg: C.rule }}>
+        <text style={{ fg: C.dim }}>
           {"CTX "}
           <Gauge fraction={ctx()} />
           <span style={{ fg: C.dim }}>{` ${Math.round(ctx() * 100)}%`}</span>
@@ -451,7 +451,7 @@ function Budget(props: { usage?: Usage; limits?: Limits; quota?: Quota; now: num
           </Show>
         }
       >
-        <text style={{ fg: C.rule }}>
+        <text style={{ fg: C.dim }}>
           {`   ${win()} `}
           {/* La parte llena toma el color del estado: cerca del tope la barra
               se enciende sola y no hay que leer el número para saberlo. */}
@@ -465,7 +465,7 @@ function Budget(props: { usage?: Usage; limits?: Limits; quota?: Quota; now: num
         </text>
         {/* La semanal va sin barra: es contexto, no la que te corta el turno. */}
         <Show when={props.quota?.weekly !== undefined}>
-          <text style={{ fg: C.rule }}>
+          <text style={{ fg: C.dim }}>
             {"   7D "}
             <span style={{ fg: pctColor(props.quota!.weekly!) }}>
               {`${Math.round(props.quota!.weekly!)}%`}

@@ -113,7 +113,7 @@ export function Prompt(props: {
         backgroundColor: C.sunken,
         border: ["left"],
         customBorderChars: EDGE,
-        borderColor: props.busy ? C.rule : C.brand,
+        borderColor: props.busy ? C.line : C.brand,
       }}
     >
       <box style={{ flexGrow: 1, height: rows(), marginLeft: 1 }}>
@@ -123,7 +123,7 @@ export function Prompt(props: {
           wrapMode="word"
           keyBindings={KEYS}
           placeholder={props.placeholder}
-          placeholderColor={C.rule}
+          placeholderColor={C.faint}
           textColor={C.fg}
           backgroundColor={C.sunken}
           focusedBackgroundColor={C.sunken}

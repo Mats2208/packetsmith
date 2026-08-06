@@ -79,7 +79,7 @@ function Census(props: { topology: Topology }) {
 function Row(props: { device: Device; prefix: string }) {
   const kind = () => kindOf(props.device.model)
   return (
-    <text style={{ fg: C.rule }}>
+    <text style={{ fg: C.faint }}>
       {/* La guía va en tono de estructura y el equipo en el suyo: así el árbol
           se lee como andamio y los nombres no compiten con las líneas. */}
       {props.prefix}
@@ -110,11 +110,11 @@ function Devices(props: { topology: Topology }) {
         <>
           <text style={{ fg: NODE[kindOf(d.model)] ?? NODE.other }}>
             {`${ICON[kindOf(d.model)]} ${d.name}`.padEnd(IP_COL).slice(0, IP_COL)}
-            <span style={{ fg: C.rule }}>{d.model.slice(0, INNER - IP_COL)}</span>
+            <span style={{ fg: C.dim }}>{d.model.slice(0, INNER - IP_COL)}</span>
           </text>
           <For each={d.ports.filter((p) => p.ip)}>
             {(p) => (
-              <text style={{ fg: C.rule }}>
+              <text style={{ fg: C.dim }}>
                 {`    ${p.name}`.padEnd(IP_COL).slice(0, IP_COL)}
                 <span style={{ fg: C.dim }}>{p.ip!.split("/")[0]}</span>
               </text>
@@ -176,7 +176,7 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
         width: WIDTH,
         border: ["left"],
         customBorderChars: SPLIT,
-        borderColor: C.rule,
+        borderColor: C.line,
         backgroundColor: C.panel,
         paddingLeft: 1,
         paddingRight: 1,
@@ -191,27 +191,27 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
           {bracket("topology")}
           {/* Único uso del verde en toda la interfaz: el enlace con PT, que es
               el dato binario que importa de un vistazo. */}
-          <span style={{ fg: props.live ? C.live : C.rule }}>
+          <span style={{ fg: props.live ? C.live : C.dim }}>
             {flush(bracket("topology"), props.live ? "● BRIDGE UP" : "○ BRIDGE DOWN")}
           </span>
         </text>
         <text style={{ fg: C.dim }}>
           {count() ? `${count()} NODES · ${links()} LINKS` : "NO DATA"}
-          <span style={{ fg: C.rule }}>
+          <span style={{ fg: C.faint }}>
             {flush(count() ? `${count()} NODES · ${links()} LINKS` : "NO DATA", props.lastTool ?? "")}
           </span>
         </text>
-        <text style={{ fg: C.rule }}>{"─".repeat(INNER)}</text>
+        <text style={{ fg: C.line }}>{"─".repeat(INNER)}</text>
         <Show when={count()}>
           <Census topology={props.topology} />
-          <text style={{ fg: C.rule }}>{"─".repeat(INNER)}</text>
+          <text style={{ fg: C.line }}>{"─".repeat(INNER)}</text>
         </Show>
       </box>
 
       <scrollbox
         style={{ flexGrow: 1 }}
         verticalScrollbarOptions={{
-          trackOptions: { backgroundColor: C.panel, foregroundColor: C.rule },
+          trackOptions: { backgroundColor: C.panel, foregroundColor: C.line },
         }}
       >
         <Show
@@ -220,7 +220,7 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
             // El vacío se dibuja: un esquema apagado dice qué va a aparecer acá
             // mucho mejor que la palabra "esperando" sola en un panel en blanco.
             <box style={{ flexDirection: "column", marginTop: 1 }}>
-              <Plate lines={SCHEMATIC} fg={C.rule} />
+              <Plate lines={SCHEMATIC} fg={C.faint} />
               <box style={{ height: 1, marginTop: 1 }}>
                 <text style={{ fg: C.dim }}>{"awaiting deployment"}</text>
               </box>
@@ -241,12 +241,12 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
                 // cuente.
                 <>
                   <text style={{ fg: C.warn }}>{"⚠ sin enlaces — lista plana"}</text>
-                  <text style={{ fg: C.rule }}>{"  pedí pt_export_topology"}</text>
+                  <text style={{ fg: C.dim }}>{"  pedí pt_export_topology"}</text>
                   <box style={{ height: 1 }} />
                   <For each={groupBySubnet(props.topology)}>
                     {(g) => (
                       <>
-                        <text style={{ fg: C.rule }}>{rule(g.label, INNER)}</text>
+                        <text style={{ fg: C.dim }}>{rule(g.label, INNER)}</text>
                         <For each={g.devices}>{(d) => <Row device={d} prefix=" " />}</For>
                       </>
                     )}
@@ -254,7 +254,7 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
                 </>
               }
             >
-              <text style={{ fg: C.rule }}>{rule("fabric", INNER)}</text>
+              <text style={{ fg: C.dim }}>{rule("fabric", INNER)}</text>
               {/* Cada raíz va como `last`: los routers no son hermanos entre sí
                   colgando de un padre común, son árboles distintos. Marcarlos
                   como no-últimos dibujaba una vertical bajo el primero que
@@ -265,7 +265,7 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
             </Show>
 
             <box style={{ height: 1 }} />
-            <text style={{ fg: C.rule }}>{rule("devices", INNER)}</text>
+            <text style={{ fg: C.dim }}>{rule("devices", INNER)}</text>
             <Devices topology={props.topology} />
           </>
         </Show>

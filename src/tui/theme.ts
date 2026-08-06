@@ -1,77 +1,76 @@
-// Paleta y símbolos. Arquetipo: Tactical Telemetry / CRT.
+// El tema activo, y cómo lo lee el resto de la interfaz.
 //
-// Reglas que se respetan a rajatabla, porque son las que evitan que esto
-// termine pareciendo cualquier otro TUI de agente:
+// `C` y `NODE` siguen siendo lo que eran —objetos con un color por clave— pero
+// ahora cada clave es un GETTER que lee el tema en curso. Eso es lo que permite
+// cambiar de tema en caliente sin tocar los ciento y pico de lugares que los
+// usan: `C.fg` adentro de un JSX queda suscripto solo, porque Solid reevalúa el
+// objeto de estilo cuando cambia una señal que se leyó al construirlo.
 //
-//   · Fondo casi-negro, NUNCA #000000: el negro puro aplana y delata al
-//     terminal. #0A0A0A deja el panel "encendido".
-//   · UN solo color de acento (rojo aviación) y solo para lo que exige
-//     atención. Si todo resalta, nada resalta.
-//   · El verde de fósforo se reserva para UN indicador: el enlace con Packet
-//     Tracer. Es el único dato binario que importa de un vistazo.
-//   · Las etiquetas van en MAYÚSCULA con tracking; los datos, en minúscula.
-//     El contraste de casing es lo que separa cronología de contenido sin
-//     gastar una línea ni un borde.
+// Hay UNA trampa y cuesta cara: si alguien copia estos valores a una constante
+// de módulo, esa constante congela el tema con el que arrancó la app y no se
+// entera de ningún cambio. Pasaba con `TONE` en frame.tsx y con `INK` en
+// chat.tsx; los dos son funciones ahora. Si vas a derivar colores, derivalos
+// adentro del componente.
+//
+// Las reglas de la paleta —qué significa cada rol y cuánto contraste necesita—
+// viven en `palette.ts`, y `themes.ts` tiene los temas. Acá solo está el
+// interruptor.
+import { createSignal } from "solid-js"
+import type { NodeRole, Palette } from "./palette.ts"
+import { DEFAULT_THEME, findTheme, THEMES } from "./themes.ts"
 
-export const C = {
-  bg: "#0A0A0A",
-  /** Texto principal — fósforo blanco, no blanco puro. */
-  fg: "#EAEAEA",
-  /** Metadata, unidades, todo lo secundario. */
-  dim: "#6B6B6B",
-  /** Estructura: bordes, separadores, reglas. */
-  rule: "#2A2A2A",
-  /**
-   * Cables del plano y parte llena de los medidores.
-   *
-   * NO es `rule`. Un filete puede permitirse ser casi invisible porque su
-   * trabajo es separar; un cable y una barra son DATO, y dibujados en `rule`
-   * sobre el fondo casi-negro directamente no se ven: los medidores parecían
-   * una mancha y el plano, nodos flotando sin conexión.
-   */
-  wire: "#4E4E4E",
-  /** Acento único. Errores y solo errores. */
-  alert: "#E61919",
-  /** Ámbar de aviso. UN solo uso: la cuota cerca del tope. Es el único estado
-   *  que no es ni normal ni error, y confundirlo con cualquiera de los dos
-   *  costaría un turno cortado a la mitad. */
-  warn: "#D97706",
-  /** Fósforo verde. EXCLUSIVO del estado del enlace con PT. */
-  live: "#4AF626",
-  /**
-   * Color de marca. Identidad y NADA más: el wordmark, el nombre en la
-   * cabecera, los títulos de sección.
-   *
-   * Es cian y no verde ni ámbar porque los otros dos ya están tomados por
-   * estados —enlace y aviso— y un color que a veces es marca y a veces es
-   * estado deja de querer decir algo. Cian además es el que no aparece en
-   * ninguna salida de Cisco, así que nunca se confunde con datos.
-   */
-  brand: "#38BDF8",
-  /** Quien habla: el operador. */
-  operator: "#EAEAEA",
-  /** Superficie hundida — bloques de código. */
-  sunken: "#141414",
-  /** Superficie levantada — el panel de telemetría. Lo separa del chat sin
-   *  gastar un marco: la diferencia de fondo ya dice "esto es otra zona". */
-  panel: "#101010",
-  /** Reflejo del wordmark. Entre la regla y el texto apagado: tiene que
-   *  leerse como fósforo, no como una segunda línea de texto. */
-  shadow: "#3A3A3A",
-} as const
+const inicial = findTheme(process.env.PACKETSMITH_THEME ?? DEFAULT_THEME)
+  ?? findTheme(DEFAULT_THEME)!
 
-/** Nodos de red. Un tono por familia, sin degradés ni medias tintas. */
-export const NODE = {
-  router: "#EAEAEA",
-  switch: "#9A9A9A",
-  wireless: "#6B6B6B",
-  cloud: "#6B6B6B",
-  host: "#6B6B6B",
-  other: "#4A4A4A",
-} as const
+const [activo, setActivo] = createSignal(inicial)
+
+/** El tema en curso. Para quien necesite el objeto entero (nombre, claro/oscuro). */
+export const theme = activo
+
+/** Cambia el tema. Devuelve false si no existe, sin tocar nada. */
+export function setTheme(name: string): boolean {
+  const t = findTheme(name)
+  if (!t) return false
+  setActivo(t)
+  return true
+}
+
+export { THEMES, DEFAULT_THEME }
+
+/**
+ * Arma un objeto de getters con las mismas claves que el original.
+ *
+ * Se enumeran las claves del tema por defecto y no se usa un Proxy pelado
+ * porque un Proxy sin `ownKeys` deja `Object.keys()` en vacío, y eso rompe
+ * silenciosamente a cualquiera que quiera recorrer la paleta. El test de temas
+ * garantiza que todos tienen exactamente las mismas claves.
+ */
+function vivo<T extends Record<string, string>>(leer: () => T): T {
+  const out = {} as T
+  for (const k of Object.keys(leer()) as (keyof T)[]) {
+    Object.defineProperty(out, k, { get: () => leer()[k], enumerable: true })
+  }
+  return out
+}
+
+type Colores = Omit<Palette, "node">
+
+/**
+ * La paleta, por rol.
+ *
+ *   · `fg` `dim` `faint` son texto, en ese orden de importancia.
+ *   · `line` es SOLO cromo —bordes, filetes, la parte vacía de un medidor— y
+ *     tiene permitido ser casi invisible justamente porque nunca lleva texto.
+ *   · `wire` son los cables del plano, que son dato y no adorno.
+ *   · `alert` `warn` `live` son estado; `brand` es identidad y nada más.
+ */
+export const C: Colores = vivo(() => {
+  const { node: _node, ...resto } = activo().colors
+  return resto
+})
+
+/** Un tono por familia de equipo, sin degradés ni medias tintas. */
+export const NODE: Record<NodeRole, string> = vivo(() => activo().colors.node)
 
 /** Framing ASCII. `[ TOPOLOGY ]` en vez de un título suelto. */
 export const bracket = (s: string) => `[ ${s.toUpperCase()} ]`
-
-/** Tracking mecánico: `TOPOLOGY` → `T O P O L O G Y`. Solo para etiquetas cortas. */
-export const track = (s: string) => s.toUpperCase().split("").join(" ")
