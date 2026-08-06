@@ -5,6 +5,7 @@ import { EFFORTS, type Effort } from "./engine/types.ts"
 import { App } from "./tui/app.tsx"
 import { loadConfig } from "./config.ts"
 import { setTheme, THEMES } from "./tui/theme.ts"
+import { LANGS, setIdioma } from "./tui/i18n.ts"
 
 // Flags mínimos, sin librería de args: son cuatro y no justifican una
 // dependencia. Se acepta `--x valor` y `--x=valor`, que es lo que la gente
@@ -20,18 +21,24 @@ const flag = (name: string) => {
 }
 
 if (argv.includes("--help") || argv.includes("-h")) {
+  // En inglés como el resto de la documentación pública del proyecto. La
+  // interfaz sí se traduce —eso es `/language`—, pero el `--help` lo lee quien
+  // todavía no arrancó la app.
+  const col = (s: string) => s.padEnd(20)
   console.log(`
-packetsmith — redes en Packet Tracer, dichas en castellano
+packetsmith — describe a network in plain language, watch it build itself
 
-  --engine <nombre>   motor de agente          (env PACKETSMITH_ENGINE)
-  --model  <nombre>   opus · sonnet · haiku…   (env PACKETSMITH_MODEL)
-  --effort <nivel>    ${EFFORTS.join(" · ")}   (env PACKETSMITH_EFFORT)
-  --theme  <nombre>   ${THEMES.map((t) => t.name).join(" · ")}
-                                               (env PACKETSMITH_THEME)
-  --help              esto
+  ${col("--engine <name>")}agent CLI to wrap        (env PACKETSMITH_ENGINE)
+  ${col("--model <name>")}opus · sonnet · haiku…   (env PACKETSMITH_MODEL)
+  ${col("--effort <level>")}${EFFORTS.join(" · ")}
+  ${col("")}                         (env PACKETSMITH_EFFORT)
+  ${col("--language <code>")}${LANGS.join(" · ")}                  (env PACKETSMITH_LANGUAGE)
+  ${col("--theme <name>")}${THEMES.map((t) => t.name).join(" · ")}
+  ${col("")}                         (env PACKETSMITH_THEME)
+  ${col("--help")}this
 
-Adentro, "/" abre la paleta de comandos y Ctrl+P también.
-Lo que elijas con /theme, /model y /effort queda guardado.
+Inside, "/" on an empty prompt opens the command palette; Ctrl+P works anywhere.
+Whatever you pick with /theme, /model, /effort and /language is remembered.
 `)
   process.exit(0)
 }
@@ -50,5 +57,8 @@ const effort = (EFFORTS as readonly string[]).includes(nivel ?? "")
 
 const tema = flag("theme") ?? process.env.PACKETSMITH_THEME ?? cfg.theme
 if (tema) setTheme(tema)
+
+const lang = flag("language") ?? process.env.PACKETSMITH_LANGUAGE ?? cfg.language
+if (lang) setIdioma(lang)
 
 render(() => <App engine={engine} model={model} effort={effort} />)

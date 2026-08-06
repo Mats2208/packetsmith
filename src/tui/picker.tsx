@@ -176,28 +176,45 @@ export function filtrar(opciones: Opcion[], consulta: string): Opcion[] {
 // Como efecto secundario ocupa la mitad de alto, que en una app partida en dos
 // paneles es alto que le devolvés a la conversación.
 
+/** Espacio entre una opción y la siguiente. */
+const HUECO = 2
+
 /**
- * Cuánto mide cada celda y cuánto la columna de familias.
+ * Cuánto mide la columna de familias.
  *
- * Los dos salen del contenido. La celda, porque `/topology` y `tokyo-night` no
- * miden lo mismo y recortar un nombre de tema a `tokyo-nigh` es feo sin motivo.
- * La columna de familias, porque los diálogos de tema, modelo y esfuerzo no
- * tienen familias: dejarle quince columnas vacías a una etiqueta que no existe
- * es regalar el espacio donde entrarían dos opciones más.
+ * Cero cuando no hay: los diálogos de tema, modelo y esfuerzo no tienen
+ * familias, y dejarle quince columnas a una etiqueta que no existe es regalar
+ * el espacio donde entrarían dos opciones más.
  */
-export function medidas(opciones: Opcion[]): { celda: number; familia: number } {
-  const masLargo = Math.max(0, ...opciones.map((o) => o.title.length))
-  const hayFamilias = opciones.some((o) => o.category)
-  return {
-    celda: Math.min(20, Math.max(10, masLargo + 3)),
-    familia: hayFamilias ? 15 : 1,
-  }
+export function anchoFamilia(opciones: Opcion[]): number {
+  if (!opciones.some((o) => o.category)) return 1
+  const masLarga = Math.max(0, ...opciones.map((o) => (o.category ?? "").length))
+  return Math.min(16, masLarga + 2)
 }
 
-/** Cuántas celdas entran por renglón con el ancho que haya. */
-export function porFila(ancho: number, opciones: Opcion[]): number {
-  const { celda, familia } = medidas(opciones)
-  return Math.max(1, Math.floor((ancho - familia - 4) / celda))
+/**
+ * Cuánto ocupa una opción dibujada: el punto de "en uso", el nombre, y el hueco.
+ *
+ * Las celdas se empaquetan según su contenido en vez de alinearse todas a la
+ * más larga. Alineado, `/mcp` arrastraba ocho espacios detrás solo porque en
+ * otro renglón existe `/topology`, y el tablero quedaba desparramado: mucho
+ * aire entre cosas que se leen juntas. Empaquetado, cada renglón ocupa lo que
+ * pesa. Se pierde la columna a plomo entre renglones distintos, y no importa —
+ * lo que agrupa acá es la familia, no la columna.
+ */
+export const anchoOpcion = (o: Opcion) => o.title.length + 1 + HUECO
+
+/** Cuántas opciones entran en un renglón, a partir de la primera. */
+export function cuantasEntran(opciones: Opcion[], desde: number, disponible: number): number {
+  let usado = 0
+  let n = 0
+  for (let i = desde; i < opciones.length; i++) {
+    const w = anchoOpcion(opciones[i]!)
+    if (n > 0 && usado + w > disponible) break
+    usado += w
+    n++
+  }
+  return Math.max(1, n)
 }
 
 export interface Fila {
@@ -217,22 +234,26 @@ export interface Fila {
  * hay nada que adivinar.
  */
 export function filas(opciones: Opcion[], ancho: number): Fila[] {
-  const cupo = porFila(ancho, opciones)
+  const disponible = Math.max(10, ancho - anchoFamilia(opciones) - 4)
   const out: Fila[] = []
-  let familia: string | undefined
-  let actual: Fila | undefined
+  let i = 0
 
-  opciones.forEach((o, i) => {
-    const suya = o.category ?? ""
-    if (!actual || suya !== familia || actual.indices.length >= cupo) {
+  while (i < opciones.length) {
+    const familia = opciones[i]!.category ?? ""
+    // Una familia por renglón: se corta donde cambia.
+    let hasta = i
+    while (hasta < opciones.length && (opciones[hasta]!.category ?? "") === familia) hasta++
+
+    let primero = true
+    while (i < hasta) {
+      const n = Math.min(cuantasEntran(opciones, i, disponible), hasta - i)
       // Solo el primer renglón de una familia lleva su nombre: repetirlo en la
       // continuación haría parecer que son dos familias distintas.
-      actual = { familia: suya === familia && actual ? "" : suya, indices: [] }
-      out.push(actual)
-      familia = suya
+      out.push({ familia: primero ? familia : "", indices: [...Array(n)].map((_, k) => i + k) })
+      i += n
+      primero = false
     }
-    actual.indices.push(i)
-  })
+  }
 
   return out
 }
@@ -245,9 +266,9 @@ export function Picker(props: {
 }) {
   const activo = dialogoActivo
   const visibles = createMemo(() => (activo() ? filtrar(activo()!.opciones, filtro()) : []))
-  // Las medidas salen del diálogo entero y no de lo filtrado: si cambiaran con
-  // cada tecla, el tablero se movería solo mientras escribís.
-  const med = createMemo(() => medidas(activo()?.opciones ?? []))
+  // El ancho de la etiqueta sale del diálogo entero y no de lo filtrado: si
+  // cambiara con cada tecla, el tablero se movería solo mientras escribís.
+  const colFamilia = createMemo(() => anchoFamilia(activo()?.opciones ?? []))
 
   const mover = (delta: number) => {
     const lista = visibles()
@@ -373,7 +394,7 @@ export function Picker(props: {
                 {/* La familia va como etiqueta a la izquierda, en tono de
                     estructura: dice de qué es cada renglón sin gastarle uno. */}
                 <text style={{ fg: C.faint, flexShrink: 0 }}>
-                  {` ${fila().familia.toUpperCase().slice(0, med().familia - 2).padEnd(med().familia - 1)}`}
+                  {` ${fila().familia.toUpperCase().slice(0, colFamilia() - 1).padEnd(colFamilia())}`}
                 </text>
                 <Index each={fila().indices}>
                   {(i) => {
@@ -389,7 +410,7 @@ export function Picker(props: {
                           flexShrink: 0,
                         }}
                       >
-                        {`${o().current ? "●" : " "}${o().title.slice(0, med().celda - 2).padEnd(med().celda - 1)}`}
+                        {`${o().current ? "●" : " "}${o().title}${" ".repeat(HUECO)}`}
                       </text>
                     )
                   }}

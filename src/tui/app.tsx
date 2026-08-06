@@ -15,9 +15,10 @@ import { Canvas, WIDTH as PANEL_WIDTH } from "./canvas.tsx"
 import { Prompt } from "./prompt.tsx"
 import { Activity } from "./activity.tsx"
 import { C, setTheme, theme } from "./theme.ts"
+import { idioma, setIdioma, T, type Lang } from "./i18n.ts"
 import { Gauge, Hairline, Hud } from "./frame.tsx"
 import { dialog, hayDialogo, Picker, registrarPaleta } from "./picker.tsx"
-import { COMMANDS, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
+import { comandoPorTitulo, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
 import { aplicarEfectos } from "./effects.ts"
 import { saveConfig } from "../config.ts"
 
@@ -43,10 +44,6 @@ export function bridgeIsUp(output: unknown): boolean {
 
 /** Cada cuánto late el indicador de actividad, en milisegundos. */
 const BEAT_MS = 120
-
-/** Lo que se contesta cuando el CLI ya no está. `/clear` levanta uno nuevo. */
-const SESION_MUERTA =
-  "⚠ la sesión con el agente terminó. Probá `/clear` para levantar una nueva."
 
 /** La conversación y la red, en markdown, para `/export`. */
 export function transcripcion(turns: Turn[], topo: Topology): string {
@@ -92,11 +89,6 @@ export function worthMapping(topo: Topology): boolean {
   return topo.devices.length >= 2 &&
     topo.links.length > 0 &&
     topo.devices.some((d) => d.x !== 0 || d.y !== 0)
-}
-
-/** `1 TURNO`, `2 TURNOS`. Un "1 TURNOS" delata que nadie miró la pantalla. */
-export function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "S"}`
 }
 
 /** `five_hour` → `5H`. La etiqueta larga no entra y no aporta. */
@@ -270,6 +262,7 @@ export function App(props: {
     const s = props.engine.start({
       model: modelPedido(),
       effort: effort(),
+      lang: idioma(),
       ...(resume ? { resume } : {}),
     })
     session = s
@@ -393,7 +386,7 @@ export function App(props: {
     decir,
     pedir(texto, etiqueta) {
       setTurns((t) => [...t, { role: "user", text: etiqueta }])
-      if (!session?.send(texto)) { decir(SESION_MUERTA); return }
+      if (!session?.send(texto)) { decir(T.sesionMuerta); return }
       setBusy(true)
       setStreaming("")
       setStartedAt(Date.now())
@@ -409,8 +402,7 @@ export function App(props: {
       // Se reanuda si ya hubo sesión: cambiar de modelo no tiene por qué
       // costarte la conversación.
       arrancar(sessionId() || undefined)
-      decir(`Modelo **${modelPedido() ?? "por defecto"}**, esfuerzo **${effort()}**.` +
-        (sessionId() ? " La conversación sigue." : ""))
+      decir(T.ahoraModelo(modelPedido() ?? "default", effort(), Boolean(sessionId())))
     },
     limpiar() {
       setTurns([])
@@ -438,6 +430,17 @@ export function App(props: {
     },
     // El tema NO se guarda al previsualizar, solo al confirmar: si no, salir
     // con Esc te dejaba guardado el que estabas mirando de paso.
+    idioma: {
+      actual: idioma,
+      poner(l) {
+        if (!setIdioma(l) ) return
+        saveConfig({ language: l as Lang })
+        // Relanza sobre la misma sesión: el idioma viaja en el prompt de
+        // sistema, que es argumento de arranque. Sin esto la interfaz cambiaba
+        // y el agente seguía contestando en el otro idioma.
+        arrancar(sessionId() || undefined)
+      },
+    },
     tema: {
       actual: () => theme().name,
       poner: (n) => void setTheme(n),
@@ -471,7 +474,7 @@ export function App(props: {
   // La paleta la arma la app porque los comandos son suyos; `picker.tsx` solo
   // sabe dibujar una lista y atender el teclado.
   registrarPaleta(() => dialog.abrir({
-    titulo: "comandos",
+    titulo: T.tituloComandos,
     prefijo: "/",
     opciones: opcionesDeComandos(),
     onElegir: (o) => findCommand(o.value)?.run(ctx),
@@ -482,7 +485,7 @@ export function App(props: {
 
     // Un `/comando` tipeado entero también corre, sin pasar por la lista: es
     // más rápido cuando ya sabés cuál querés.
-    const directo = COMMANDS.find((c) => c.title === text.trim().split(/\s+/)[0])
+    const directo = comandoPorTitulo(text)
     if (directo) { directo.run(ctx); return }
 
     setTurns((t) => [...t, { role: "user", text }])
@@ -492,7 +495,7 @@ export function App(props: {
     // ponía en "trabajando", y se quedaba así para siempre: sin eventos que
     // esperar, nada volvía a poner `busy` en falso y el campo de escritura
     // quedaba bloqueado. Decirlo y no bloquear nada es todo lo que hace falta.
-    if (!session.send(text)) { decir(SESION_MUERTA); return }
+    if (!session.send(text)) { decir(T.sesionMuerta); return }
 
     setBusy(true)
     setStreaming("")
@@ -564,8 +567,8 @@ export function App(props: {
             />
           }
           segments={[
-            { text: plural(turns().length, "TURNO") },
-            { text: plural(topology().devices.length, "NODO") },
+            { text: T.turnos(turns().length) },
+            { text: T.nodosBarra(topology().devices.length) },
             { text: `$${cost().toFixed(4)}` },
           ]}
           tail={<Budget usage={usage()} limits={limits()} quota={quota()} now={now()} />}
@@ -583,7 +586,7 @@ export function App(props: {
           ruido permanente en la línea donde se escribe. */}
       <Prompt
         busy={busy()}
-        placeholder={busy() ? "el agente está trabajando…" : "describí la red que querés  ·  / para comandos"}
+        placeholder={busy() ? T.trabajando : T.describiLaRed}
         onSubmit={submit}
         onReady={(leer) => (leerBorrador = leer)}
       />

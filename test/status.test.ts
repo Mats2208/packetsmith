@@ -2,7 +2,8 @@
 // Todo esto sale de eventos que el CLI ya emitía y que hasta ahora tirábamos.
 import { expect, test, describe } from "bun:test"
 import { clock, compact } from "../src/tui/activity.tsx"
-import { layoutKey, limitChip, plural, untilReset, windowLabel, worthMapping } from "../src/tui/app.tsx"
+import { layoutKey, limitChip, untilReset, windowLabel, worthMapping } from "../src/tui/app.tsx"
+import { setIdioma, T } from "../src/tui/i18n.ts"
 import { readUsage, translate } from "../src/engine/claude.ts"
 import type { AgentEvent } from "../src/engine/types.ts"
 
@@ -25,10 +26,20 @@ describe("formato", () => {
     expect(clock(73_000)).toBe("1m13s")
   })
 
-  test("no dice 1 TURNOS", () => {
-    expect(plural(1, "TURNO")).toBe("1 TURNO")
-    expect(plural(0, "TURNO")).toBe("0 TURNOS")
-    expect(plural(9, "NODO")).toBe("9 NODOS")
+  test("no dice 1 TURNOS, en ninguno de los dos idiomas", () => {
+    // Un "1 TURNOS" delata que nadie miró la pantalla. Y la regla del plural no
+    // es la misma en los dos idiomas, así que vive en el diccionario y no en
+    // una función que le pega una S al final.
+    setIdioma("es")
+    expect(T.turnos(1)).toBe("1 TURNO")
+    expect(T.turnos(0)).toBe("0 TURNOS")
+    expect(T.nodosBarra(9)).toBe("9 NODOS")
+
+    setIdioma("en")
+    expect(T.turnos(1)).toBe("1 TURN")
+    expect(T.turnos(2)).toBe("2 TURNS")
+    expect(T.nodos(1)).toBe("1 NODE")
+    expect(T.enlaces(3)).toBe("3 LINKS")
   })
 
   test("la ventana de cuota se abrevia", () => {

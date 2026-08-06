@@ -4,6 +4,7 @@ import { For, Show } from "solid-js"
 import type { Topology } from "../topology/model.ts"
 import { drawMap, naturalWidth, type Ink } from "../topology/map.ts"
 import { C } from "./theme.ts"
+import { T } from "./i18n.ts"
 import { GUTTER } from "./frame.tsx"
 import { Welcome } from "./welcome.tsx"
 
@@ -81,7 +82,7 @@ function MapBlock(props: { topology: Topology; width: number }) {
           border: true,
           borderColor: C.line,
         }}
-        title=" PLANO · CANVAS DE PT "
+        title={T.planoCanvas}
         titleAlignment="center"
       >
         <For each={rows()}>
@@ -331,7 +332,7 @@ export function timingLine(t: NonNullable<Turn["timing"]>): string {
   if (t.totalMs < 20_000) return `⏱ ${seg(t.totalMs)}`
 
   const pct = Math.round((t.toolMs / t.totalMs) * 100)
-  return `⏱ ${seg(t.totalMs)}  ·  ${seg(t.toolMs)} en packet tracer (${pct}%)  ·  ${seg(Math.max(0, t.totalMs - t.toolMs))} en el modelo`
+  return `⏱ ${seg(t.totalMs)}  ·  ${seg(t.toolMs)} ${T.enPacketTracer} (${pct}%)  ·  ${seg(Math.max(0, t.totalMs - t.toolMs))} ${T.enElModelo}`
 }
 
 /**
@@ -431,7 +432,7 @@ function Block(props: { role: Turn["role"]; children: any }) {
         borderColor: mine() ? C.fg : C.faint,
       }}
     >
-      <text style={{ fg: mine() ? C.fg : C.dim }}>{mine() ? "VOS" : "AGENTE"}</text>
+      <text style={{ fg: mine() ? C.fg : C.dim }}>{mine() ? T.vos : T.agente}</text>
       {props.children}
     </box>
   )

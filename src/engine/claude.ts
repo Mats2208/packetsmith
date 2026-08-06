@@ -23,7 +23,7 @@ import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import type { AgentEvent, Engine, Session, StartOpts } from "./types.ts"
 import { jsonLines } from "./stream.ts"
-import { SYSTEM_PROMPT } from "./prompt.ts"
+import { systemPrompt } from "./prompt.ts"
 import { scopeToPacketTracer } from "./mcp.ts"
 
 export function buildArgs(opts: StartOpts & { mcpArgs?: string[] }): string[] {
@@ -64,7 +64,7 @@ export function buildArgs(opts: StartOpts & { mcpArgs?: string[] }): string[] {
   // desaparecían en silencio y el agente arrancaba con los 11 servidores MCP
   // del usuario y el modelo por defecto. Medido. Poniéndolo al final, lo peor
   // que puede pasar es que se recorte el prompt.
-  args.push("--append-system-prompt", SYSTEM_PROMPT)
+  args.push("--append-system-prompt", systemPrompt(opts.lang ?? "en"))
   return args
 }
 

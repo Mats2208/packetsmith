@@ -8,9 +8,10 @@
 import { expect, test, describe, afterEach } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { App } from "../src/tui/app.tsx"
-import { dialog, filas, filtrar, hayDialogo, porFila, puntaje, type Opcion } from "../src/tui/picker.tsx"
-import { COMMANDS } from "../src/tui/commands.ts"
+import { anchoFamilia, anchoOpcion, dialog, filas, filtrar, hayDialogo, puntaje, type Opcion } from "../src/tui/picker.tsx"
+import { COMMANDS, textoDe } from "../src/tui/commands.ts"
 import { setTheme, theme } from "../src/tui/theme.ts"
+import { LANGS, setIdioma, T } from "../src/tui/i18n.ts"
 import type { AgentEvent, Engine } from "../src/engine/types.ts"
 
 process.env.PACKETSMITH_NO_QUOTA = "1"
@@ -109,24 +110,36 @@ describe("el tablero", () => {
   test("una familia que no entra se parte, sin repetir el nombre", () => {
     // Repetir la etiqueta en la continuación haría parecer que son dos
     // familias distintas, que es justo lo que el agrupado viene a evitar.
-    const f = filas(CINCO, porFila(120, CINCO) === 3 ? 120 : 55)
-    const angosto = filas(CINCO, 45)
-    expect(porFila(45, CINCO)).toBeLessThan(3)
+    const angosto = filas(CINCO, 35)
     expect(angosto[0]!.familia).toBe("agente")
     expect(angosto[1]!.familia).toBe("")
-    expect(f.length).toBeGreaterThan(0)
+    expect(angosto[1]!.indices.length).toBeGreaterThan(0)
   })
 
-  test("los índices apuntan a la lista filtrada, sin huecos ni repetidos", () => {
+  test("los índices cubren la lista entera, sin huecos ni repetidos", () => {
     // El cursor es UNO solo sobre la lista plana; si los índices no la
     // cubrieran exactamente, moverse saltearía comandos.
-    const todos = filas(CINCO, 60).flatMap((f) => f.indices)
-    expect(todos).toEqual([0, 1, 2, 3, 4])
+    for (const ancho of [20, 35, 60, 120]) {
+      expect(filas(CINCO, ancho).flatMap((f) => f.indices)).toEqual([0, 1, 2, 3, 4])
+    }
   })
 
-  test("en una terminal muy angosta queda al menos una celda por renglón", () => {
-    expect(porFila(20, CINCO)).toBeGreaterThanOrEqual(1)
-    expect(filas(CINCO, 20).flatMap((f) => f.indices)).toHaveLength(5)
+  test("las opciones se empaquetan según lo que miden", () => {
+    // Alineadas a la más larga, `/mcp` arrastraba ocho espacios detrás solo
+    // porque en otro renglón existe `/topology`, y el tablero quedaba
+    // desparramado. Empaquetadas, un renglón ocupa lo que pesa.
+    expect(anchoOpcion({ value: "a", title: "/mcp" })).toBeLessThan(
+      anchoOpcion({ value: "b", title: "/topology" }))
+  })
+
+  test("sin familias la columna de etiqueta no gasta espacio", () => {
+    // Los diálogos de tema, modelo y esfuerzo no tienen familias.
+    const temas = [{ value: "ice", title: "ice" }, { value: "nord", title: "nord" }]
+    expect(anchoFamilia(temas)).toBeLessThan(anchoFamilia(CINCO))
+  })
+
+  test("en una terminal muy angosta igual entra una opción por renglón", () => {
+    expect(filas(CINCO, 18).every((f) => f.indices.length >= 1)).toBe(true)
   })
 })
 
@@ -185,8 +198,8 @@ describe("el teclado no se le escapa al campo de escritura", () => {
 
     expect(enviados).toHaveLength(0)
     expect(hayDialogo()).toBe(false)
-    // /help contesta en el chat sin gastar un turno.
-    expect(await frame(s)).toContain("comandos")
+    // /help contesta en el chat sin gastar un turno, listando los comandos.
+    expect(await frame(s)).toContain("/model")
   })
 
   test("las flechas mueven el tablero, no el cursor del texto", async () => {
@@ -239,17 +252,25 @@ describe("/theme previsualiza y revierte", () => {
 })
 
 describe("comandos", () => {
-  test("no hay dos con el mismo nombre ni el mismo título", () => {
+  test("no hay dos con el mismo id ni el mismo `/nombre`", () => {
     expect(new Set(COMMANDS.map((c) => c.name)).size).toBe(COMMANDS.length)
-    expect(new Set(COMMANDS.map((c) => c.title)).size).toBe(COMMANDS.length)
+    expect(new Set(COMMANDS.map((c) => textoDe(c).title)).size).toBe(COMMANDS.length)
   })
 
-  test("todos empiezan con `/` y tienen descripción", () => {
-    for (const c of COMMANDS) {
-      expect(c.title.startsWith("/")).toBe(true)
-      expect(c.description.length).toBeGreaterThan(0)
-      expect(c.category.length).toBeGreaterThan(0)
+  test("todos tienen texto en LOS DOS idiomas", () => {
+    // El diccionario se llena a mano, así que un comando nuevo puede quedar sin
+    // traducir y salir en pantalla con su id crudo (`app.export`) en vez de con
+    // su nombre. Este test es la red que lo atrapa.
+    for (const lang of LANGS) {
+      setIdioma(lang)
+      for (const c of COMMANDS) {
+        const t = textoDe(c)
+        expect(t.title.startsWith("/")).toBe(true)
+        expect(t.desc.length).toBeGreaterThan(0)
+        expect(T.cat[c.category].length).toBeGreaterThan(0)
+      }
     }
+    setIdioma("en")
   })
 
   test("se puede tipear el comando entero sin pasar por la lista", async () => {
@@ -259,6 +280,6 @@ describe("comandos", () => {
     s.mockInput.pressEnter()
     await new Promise((r) => setTimeout(r, 30))
     expect(enviados).toHaveLength(0)
-    expect(await frame(s)).toContain("sesión")
+    expect(await frame(s)).toContain("session")
   })
 })

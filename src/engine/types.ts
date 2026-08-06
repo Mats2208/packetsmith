@@ -12,6 +12,15 @@ export interface StartOpts {
    * cierra el proceso y se levanta otro sobre la MISMA conversación.
    */
   resume?: string
+  /**
+   * En qué idioma tiene que contestar el agente.
+   *
+   * Va acá y no en la UI porque el prompt de sistema es un argumento de
+   * arranque: sin decírselo, el agente responde en el idioma de sus propias
+   * instrucciones, y una interfaz en inglés que contesta en castellano no está
+   * en ningún idioma.
+   */
+  lang?: string
   /** Lista blanca de tools. `undefined` = las que el CLI traiga por defecto. */
   allowedTools?: string[]
   cwd?: string

@@ -9,6 +9,7 @@
 import { Show } from "solid-js"
 import type { Phase } from "../engine/types.ts"
 import { C } from "./theme.ts"
+import { T } from "./i18n.ts"
 import { sweep } from "./ascii.ts"
 
 /**
@@ -18,15 +19,6 @@ import { sweep } from "./ascii.ts"
  * bloques y filetes, y los puntos meten una tipografía que no es de la casa.
  */
 const TURN = ["◐", "◓", "◑", "◒"] as const
-
-/** Etiqueta y color por fase. En reposo se apaga: nada que mirar, nada que gritar. */
-const LABEL: Record<Phase, string> = {
-  idle: "LISTO",
-  requesting: "CONSULTANDO",
-  thinking: "RAZONANDO",
-  writing: "ESCRIBIENDO",
-  tool: "EJECUTANDO",
-}
 
 /** `1234` → `1.2k`. Los tokens de razonamiento llegan a decenas de miles. */
 export function compact(n: number): string {
@@ -59,7 +51,7 @@ export function Activity(props: {
   return (
     <box style={{ flexDirection: "row", height: 1 }}>
       <text style={{ fg: busy() ? C.fg : C.faint, flexShrink: 0 }}>
-        {`${glyph()} ${props.phase === "tool" && props.detail ? props.detail : LABEL[props.phase]}`}
+        {`${glyph()} ${props.phase === "tool" && props.detail ? props.detail : T.fases[props.phase]}`}
       </text>
       {/* Los tokens de razonamiento son la prueba de que algo pasa cuando no
           hay texto todavía. Sin ellos "RAZONANDO" también podría estar mintiendo. */}
