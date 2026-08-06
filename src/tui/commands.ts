@@ -13,6 +13,7 @@ import { THEMES } from "./themes.ts"
 import { LANGS, T, type Lang } from "./i18n.ts"
 import { findProvider, PROVIDERS, todosLosProveedores, type Plan } from "../engine/providers/catalog.ts"
 import { dialog, type Opcion } from "./picker.tsx"
+import { version as VERSION } from "../../package.json"
 
 /** Lo que un comando puede tocar de la app. Lo arma `app.tsx`. */
 export interface CommandCtx {
@@ -359,12 +360,19 @@ export const COMMANDS: Command[] = [
     },
   },
   {
+    // Lo que se pega en un issue.
+    //
+    // Sale como tabla de markdown a propósito: se copia con `/copy` y se pega
+    // en GitHub sin tocar nada. Y arranca por versión y plataforma, que es lo
+    // primero que hay que preguntar y lo último que la gente pone.
     name: "app.debug",
     category: "utilidad",
     run(ctx) {
       const e = ctx.estado()
       ctx.decir([
         "| | |", "|---|---|",
+        `| packetsmith | ${VERSION} |`,
+        `| platform | ${process.platform} ${process.arch} · bun ${process.versions.bun ?? "?"} |`,
         `| engine | ${e.engine} |`,
         ...Object.entries(e.motor).map(([k, v]) => `| ${k} | ${v} |`),
         `| model | ${e.model} |`,

@@ -87,6 +87,7 @@ export interface Textos {
   loginListo: (label: string) => string
   loginFallo: (motivo: string) => string
   sinMedidor: string
+  pegaEnUnIssue: string
   tituloUso: string
 
   // ── Comandos ─────────────────────────────────────────────────────────────
@@ -189,6 +190,7 @@ Acá se espera solo; cuando autorices sigue.`,
   loginListo: (l) => `Sesión de **${l}** guardada. Ya podés mandar un mensaje.`,
   loginFallo: (m) => `No se pudo completar el login: ${m}`,
   sinMedidor: "Este plan no publica un medidor de consumo.",
+  pegaEnUnIssue: "Copiá esto con `/copy` y pegalo en https://github.com/Mats2208/packetsmith/issues",
   tituloUso: "consumo",
 
   cat: { agente: "agente", apariencia: "apariencia", pt: "packet tracer", utilidad: "utilidad" },
@@ -322,6 +324,7 @@ const en: Textos = {
   loginListo: (l) => `**${l}** session saved. You can send a message now.`,
   loginFallo: (m) => `Could not finish the login: ${m}`,
   sinMedidor: "This plan does not publish a usage meter.",
+  pegaEnUnIssue: "Copy this with `/copy` and paste it at https://github.com/Mats2208/packetsmith/issues",
   tituloUso: "usage",
 
   cat: { agente: "agent", apariencia: "appearance", pt: "packet tracer", utilidad: "utility" },

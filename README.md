@@ -4,7 +4,7 @@
 
 **Say _"three routers with OSPF and a LAN each"_ — and watch the topology appear in Cisco Packet Tracer while the panel on your right draws itself.**
 
-[![Status](https://img.shields.io/badge/status-alpha-e8a33d?style=flat-square)](https://github.com/Mats2208/packetsmith/releases)
+[![Status](https://img.shields.io/badge/status-beta-3fb950?style=flat-square)](https://github.com/Mats2208/packetsmith/releases)
 [![Bun](https://img.shields.io/badge/Bun-≥1.3-000000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OpenTUI](https://img.shields.io/badge/OpenTUI-Solid-4051B5?style=flat-square)](https://github.com/sst/opentui)
@@ -119,9 +119,27 @@ An uplink crossing from one edge of the canvas to the other is obvious in the pl
 
 The plan is drawn only when the **layout changed** — moving one device counts. Repeating an identical figure under every reply turns it into wallpaper and it stops being looked at.
 
-## Status: alpha
+## Status: beta
 
-Working today: both engine classes (the `claude` CLI and our own agent loop against ~150 HTTP providers, six of them curated with their plans), three wire protocols, live model lists, per-plan usage meters, the command palette, 13 themes, the split-screen TUI, the fabric tree and canvas plan, and per-turn timing. Not there yet: multi-session, packaging.
+**Working:** both engine classes — the `claude` CLI and our own agent loop — three wire
+protocols, ~150 providers with their plans, live model lists, per-plan usage meters, the
+command palette, 13 themes, the split-screen TUI, the fabric tree and canvas plan, per-turn
+timing. 346 tests, and the published package is verified by packing, installing and running
+it.
+
+**What "beta" means here**, precisely — this is the honest part:
+
+- **Seven providers are verified end to end.** The other ~143 come from the models.dev
+  catalog and have not been run. They are offered anyway, because someone with a Fireworks
+  key should be able to try it; if one fails, [open an
+  issue](https://github.com/Mats2208/packetsmith/issues/new?template=provider.md) and it
+  gets fixed. There is a template that asks for the right things.
+- **The ChatGPT plan** — device login plus the Responses protocol — is written against
+  Codex's real surface but has never run against a live subscription.
+- Single session. No packaged binary.
+
+Inside the app, `/debug` prints a paste-ready table with version, platform, engine, plan and
+model. `/copy` puts it on the clipboard. That is the whole bug report.
 
 ## Install
 

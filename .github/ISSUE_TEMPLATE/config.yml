@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Packet Tracer itself misbehaves
+    url: https://github.com/Mats2208/MCP-Packet-Tracer/issues
+    about: Device handling, topology deployment and the bridge live in the MCP server.

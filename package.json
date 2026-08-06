@@ -1,6 +1,6 @@
 {
   "name": "packetsmith",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Terminal agent for Cisco Packet Tracer. Describe a network in plain language and watch the topology build itself.",
   "keywords": [
     "cisco",
