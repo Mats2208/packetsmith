@@ -8,7 +8,7 @@
 import { expect, test, describe, afterEach } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { App } from "../src/tui/app.tsx"
-import { dialog, filtrar, hayDialogo, puntaje, ventana, type Opcion } from "../src/tui/picker.tsx"
+import { dialog, filas, filtrar, hayDialogo, porFila, puntaje, type Opcion } from "../src/tui/picker.tsx"
 import { COMMANDS } from "../src/tui/commands.ts"
 import { setTheme, theme } from "../src/tui/theme.ts"
 import type { AgentEvent, Engine } from "../src/engine/types.ts"
@@ -91,21 +91,42 @@ describe("filtrar", () => {
   })
 })
 
-describe("ventana", () => {
-  test("una lista corta se muestra entera", () => {
-    expect(ventana(4, 0, 10)).toEqual([0, 4])
+describe("el tablero", () => {
+  const op = (title: string, category: string): Opcion => ({ value: title, title, category })
+  const CINCO = [
+    op("/model", "agente"), op("/effort", "agente"), op("/engine", "agente"),
+    op("/theme", "apariencia"),
+    op("/help", "utilidad"),
+  ]
+
+  test("una familia por renglón", () => {
+    const f = filas(CINCO, 120)
+    expect(f).toHaveLength(3)
+    expect(f[0]).toEqual({ familia: "agente", indices: [0, 1, 2] })
+    expect(f[1]).toEqual({ familia: "apariencia", indices: [3] })
   })
 
-  test("el cursor no se sale por abajo", () => {
-    // Sin esto, bajar más allá de la décima fila movía la selección a un lugar
-    // que no estaba dibujado.
-    const [desde, hasta] = ventana(30, 25, 10)
-    expect(25).toBeGreaterThanOrEqual(desde)
-    expect(25).toBeLessThan(hasta)
+  test("una familia que no entra se parte, sin repetir el nombre", () => {
+    // Repetir la etiqueta en la continuación haría parecer que son dos
+    // familias distintas, que es justo lo que el agrupado viene a evitar.
+    const f = filas(CINCO, porFila(120, CINCO) === 3 ? 120 : 55)
+    const angosto = filas(CINCO, 45)
+    expect(porFila(45, CINCO)).toBeLessThan(3)
+    expect(angosto[0]!.familia).toBe("agente")
+    expect(angosto[1]!.familia).toBe("")
+    expect(f.length).toBeGreaterThan(0)
   })
 
-  test("al final de la lista la ventana se apoya en el borde", () => {
-    expect(ventana(30, 29, 10)).toEqual([20, 30])
+  test("los índices apuntan a la lista filtrada, sin huecos ni repetidos", () => {
+    // El cursor es UNO solo sobre la lista plana; si los índices no la
+    // cubrieran exactamente, moverse saltearía comandos.
+    const todos = filas(CINCO, 60).flatMap((f) => f.indices)
+    expect(todos).toEqual([0, 1, 2, 3, 4])
+  })
+
+  test("en una terminal muy angosta queda al menos una celda por renglón", () => {
+    expect(porFila(20, CINCO)).toBeGreaterThanOrEqual(1)
+    expect(filas(CINCO, 20).flatMap((f) => f.indices)).toHaveLength(5)
   })
 })
 
@@ -168,11 +189,11 @@ describe("el teclado no se le escapa al campo de escritura", () => {
     expect(await frame(s)).toContain("comandos")
   })
 
-  test("las flechas mueven la lista, no el cursor del texto", async () => {
+  test("las flechas mueven el tablero, no el cursor del texto", async () => {
     const s = await montar()
     await s.mockInput.typeText("/")
     const primero = await frame(s)
-    s.mockInput.pressArrow("down")
+    s.mockInput.pressArrow("right")
     const segundo = await frame(s)
     expect(segundo).not.toBe(primero)
   })
@@ -199,7 +220,7 @@ describe("/theme previsualiza y revierte", () => {
     await new Promise((r) => setTimeout(r, 20))
 
     const antes = theme().name
-    s.mockInput.pressArrow("down")
+    s.mockInput.pressArrow("right")
     expect(theme().name).not.toBe(antes)
   })
 
@@ -210,7 +231,7 @@ describe("/theme previsualiza y revierte", () => {
     await s.mockInput.typeText("theme")
     s.mockInput.pressEnter()
     await new Promise((r) => setTimeout(r, 20))
-    s.mockInput.pressArrow("down")
+    s.mockInput.pressArrow("right")
     s.mockInput.pressEscape()
     await new Promise((r) => setTimeout(r, 40))
     expect(theme().name).toBe(original)

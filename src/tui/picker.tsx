@@ -1,10 +1,13 @@
-// La paleta de comandos: una lista que se filtra mientras escribís.
+// La paleta de comandos, como tablero.
 //
-// Se dibuja a mano en vez de usar el `<select>` de OpenTUI, y la razón es una
-// sola: `<select>` pinta cada fila de UN color, y acá cada fila son dos cosas
-// distintas —el comando y lo que hace—, que necesitan tonos distintos para que
-// la lista se lea de un vistazo en vez de tener que leerla entera. El resto de
-// esta interfaz también está dibujada a mano, así que tampoco desentona.
+// No es una lista con scroll y un filtro: es una grilla donde los catorce
+// comandos están a la vista, agrupados por familia. Un buscador difuso resuelve
+// bien el caso "sé cómo se llama y lo quiero ya", y resuelve mal el que importa
+// más al principio: "no sé qué puedo pedirle a esto". Con pocos comandos, el
+// repertorio completo delante es mejor interfaz que una caja de texto.
+//
+// Se dibuja a mano en vez de usar el `<select>` de OpenTUI porque `<select>` es
+// una lista vertical de un solo color por fila, o sea lo contrario de esto.
 //
 // Lo que sí se aprovecha del teclado global: mientras hay un diálogo abierto,
 // TODAS las teclas se atienden acá y se marcan como consumidas. El campo de
@@ -13,7 +16,7 @@
 import { createMemo, createSignal, Index, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { KeyEvent } from "@opentui/core"
-import { C } from "./theme.ts"
+import { bracket, C } from "./theme.ts"
 
 export interface Opcion {
   /** Lo que se tipea o elige. Es lo que vuelve en `onElegir`. */
@@ -121,42 +124,130 @@ export function puntaje(texto: string, consulta: string): number | undefined {
   return i === q.length ? 100 - Math.min(saltos, 99) : undefined
 }
 
-/** Las opciones que sobreviven al filtro, mejor puntaje primero. */
+/**
+ * Las opciones que sobreviven al filtro.
+ *
+ * Ordenadas por puntaje pero SIN romper las familias: primero va la familia que
+ * tenga el mejor resultado, y adentro de cada una los suyos por puntaje. Un
+ * orden global por puntaje deja las familias intercaladas, y en un tablero eso
+ * se ve como una fila por comando —cada cambio de familia abre un renglón—, que
+ * es justo lo que el agrupado viene a evitar.
+ */
 export function filtrar(opciones: Opcion[], consulta: string): Opcion[] {
   if (!consulta) return opciones
-  return opciones
+
+  const puntuadas = opciones
     .map((o) => {
       // Se mira el título Y la descripción: buscar "tema" tiene que encontrar
-      // `/theme` aunque el comando esté en inglés.
+      // `/theme` aunque el comando esté en inglés. La descripción vale menos:
+      // que el nombre coincida es una señal más fuerte.
       const a = puntaje(o.title, consulta)
       const b = o.description ? puntaje(o.description, consulta) : undefined
       const p = Math.max(a ?? -Infinity, b !== undefined ? b - 200 : -Infinity)
       return { o, p }
     })
     .filter((x) => x.p > -Infinity)
-    .sort((a, b) => b.p - a.p)
+
+  const mejorDe = new Map<string, number>()
+  for (const { o, p } of puntuadas) {
+    const fam = o.category ?? ""
+    mejorDe.set(fam, Math.max(mejorDe.get(fam) ?? -Infinity, p))
+  }
+
+  return puntuadas
+    .sort((a, b) => {
+      const fa = mejorDe.get(a.o.category ?? "")!
+      const fb = mejorDe.get(b.o.category ?? "")!
+      return fb !== fa ? fb - fa : b.p - a.p
+    })
     .map((x) => x.o)
 }
 
 // ── Dibujo ─────────────────────────────────────────────────────────────────
+//
+// No es una lista con scroll sino un TABLERO: los comandos entran todos de una,
+// agrupados por familia, una familia por renglón. La diferencia no es estética.
+// Una lista de diez con filtro te obliga a recordar qué había abajo y a confiar
+// en que el filtro encuentre lo que ni sabés cómo se llama; un tablero te
+// muestra el repertorio completo y podés elegir mirando. Con catorce comandos,
+// esconderlos detrás de un scroll era regalar la única ventaja que hay: que son
+// pocos.
+//
+// Como efecto secundario ocupa la mitad de alto, que en una app partida en dos
+// paneles es alto que le devolvés a la conversación.
 
-/** Cuántas filas se ven de una. Más que esto le come la pantalla al chat. */
-const VISIBLES = 10
+/**
+ * Cuánto mide cada celda y cuánto la columna de familias.
+ *
+ * Los dos salen del contenido. La celda, porque `/topology` y `tokyo-night` no
+ * miden lo mismo y recortar un nombre de tema a `tokyo-nigh` es feo sin motivo.
+ * La columna de familias, porque los diálogos de tema, modelo y esfuerzo no
+ * tienen familias: dejarle quince columnas vacías a una etiqueta que no existe
+ * es regalar el espacio donde entrarían dos opciones más.
+ */
+export function medidas(opciones: Opcion[]): { celda: number; familia: number } {
+  const masLargo = Math.max(0, ...opciones.map((o) => o.title.length))
+  const hayFamilias = opciones.some((o) => o.category)
+  return {
+    celda: Math.min(20, Math.max(10, masLargo + 3)),
+    familia: hayFamilias ? 15 : 1,
+  }
+}
 
-/** Ventana de la lista alrededor del cursor, para que no se salga por abajo. */
-export function ventana(total: number, cursor: number, alto = VISIBLES): [number, number] {
-  if (total <= alto) return [0, total]
-  const medio = Math.floor(alto / 2)
-  const desde = Math.max(0, Math.min(cursor - medio, total - alto))
-  return [desde, desde + alto]
+/** Cuántas celdas entran por renglón con el ancho que haya. */
+export function porFila(ancho: number, opciones: Opcion[]): number {
+  const { celda, familia } = medidas(opciones)
+  return Math.max(1, Math.floor((ancho - familia - 4) / celda))
+}
+
+export interface Fila {
+  /** Vacío en los renglones de continuación de una familia larga. */
+  familia: string
+  /** Índices dentro de la lista filtrada, para que el cursor sea uno solo. */
+  indices: number[]
+}
+
+/**
+ * Arma los renglones: una familia por renglón, partida en varios si no entra.
+ *
+ * Se calcula acá y no se deja a `flexWrap` a propósito. Un renglón que envuelve
+ * tiene alto variable, y una caja de alto variable sin declararlo es la trampa
+ * de OpenTUI que ya está anotada dos veces en AGENTS.md: el bloque de abajo le
+ * pisa la última fila. Partiendo a mano, cada renglón declara `height: 1` y no
+ * hay nada que adivinar.
+ */
+export function filas(opciones: Opcion[], ancho: number): Fila[] {
+  const cupo = porFila(ancho, opciones)
+  const out: Fila[] = []
+  let familia: string | undefined
+  let actual: Fila | undefined
+
+  opciones.forEach((o, i) => {
+    const suya = o.category ?? ""
+    if (!actual || suya !== familia || actual.indices.length >= cupo) {
+      // Solo el primer renglón de una familia lleva su nombre: repetirlo en la
+      // continuación haría parecer que son dos familias distintas.
+      actual = { familia: suya === familia && actual ? "" : suya, indices: [] }
+      out.push(actual)
+      familia = suya
+    }
+    actual.indices.push(i)
+  })
+
+  return out
 }
 
 export function Picker(props: {
   /** Si el campo de escritura está vacío AHORA. Decide si `/` abre la lista. */
   draftVacio: () => boolean
+  /** Ancho de la terminal: decide cuántas celdas entran por renglón. */
+  ancho: () => number
 }) {
   const activo = dialogoActivo
   const visibles = createMemo(() => (activo() ? filtrar(activo()!.opciones, filtro()) : []))
+  // Las medidas salen del diálogo entero y no de lo filtrado: si cambiaran con
+  // cada tecla, el tablero se movería solo mientras escribís.
+  const med = createMemo(() => medidas(activo()?.opciones ?? []))
 
   const mover = (delta: number) => {
     const lista = visibles()
@@ -164,6 +255,21 @@ export function Picker(props: {
     const siguiente = (cursor() + delta + lista.length) % lista.length
     setCursor(siguiente)
     activo()?.onMover?.(lista[siguiente]!)
+  }
+
+  /** Salta al primer comando de la familia anterior o la siguiente. */
+  const saltarFamilia = (delta: number) => {
+    const lista = visibles()
+    if (!lista.length) return
+    const grupos = [...new Set(lista.map((o) => o.category ?? ""))]
+    if (grupos.length < 2) { mover(delta); return }
+
+    const actual = grupos.indexOf(lista[cursor()]?.category ?? "")
+    const destino = grupos[(actual + delta + grupos.length) % grupos.length]
+    const i = lista.findIndex((o) => (o.category ?? "") === destino)
+    if (i === -1) return
+    setCursor(i)
+    activo()?.onMover?.(lista[i]!)
   }
 
   const elegir = () => {
@@ -196,8 +302,13 @@ export function Picker(props: {
 
     switch (k.name) {
       case "escape": dialog.cerrar(true); return
-      case "up": mover(-1); return
-      case "down": mover(1); return
+      // En un tablero, ←→ es "el de al lado" y ⇅ es "la familia de arriba o de
+      // abajo". Cuando hay una sola familia —los diálogos de tema, modelo o
+      // esfuerzo— ⇅ vuelve a ser ±1, que es lo que la mano espera ahí.
+      case "left": mover(-1); return
+      case "right": mover(1); return
+      case "up": saltarFamilia(-1); return
+      case "down": saltarFamilia(1); return
       case "return":
       case "kpenter": elegir(); return
       case "tab": {
@@ -237,56 +348,72 @@ export function Picker(props: {
           borderColor: C.line,
           backgroundColor: C.panel,
         }}
-        title={` ${activo()!.titulo.toUpperCase()} `}
+        // `[ COMANDOS ]` y no `COMANDOS` a secas: es el mismo framing que usa
+        // el panel de topología. Detalles así son los que hacen que las tres
+        // zonas se lean como un aparato y no como tres widgets juntos.
+        title={` ${bracket(activo()!.titulo)} `}
         titleAlignment="left"
       >
         <Show
           when={visibles().length}
-          fallback={<text style={{ fg: C.faint }}>{"  sin resultados"}</text>}
+          fallback={
+            <box style={{ height: 1 }}>
+              <text style={{ fg: C.faint }}>{"  nada coincide"}</text>
+            </box>
+          }
         >
-          {/* `Index` y no `For`: las filas son POSICIONES, no identidades. Con
-              `For`, cada tecla rehace el arreglo filtrado y sus elementos son
-              objetos nuevos, así que Solid destruía y reinsertaba todas las
+          {/* `Index` y no `For`: los renglones son POSICIONES, no identidades.
+              Con `For`, cada tecla rehace el arreglo filtrado y sus elementos
+              son objetos nuevos, así que Solid destruía y reinsertaba todas las
               cajas — y OpenTUI se quejaba en cada pulsación ("Anchor is the
-              same as the node being inserted"). `Index` conserva las filas y
-              solo cambia lo que dicen. */}
-          <Index each={visibles().slice(...ventana(visibles().length, cursor()))}>
-            {(o, i) => {
-              const real = () => ventana(visibles().length, cursor())[0] + i
-              const puesto = () => real() === cursor()
-              return (
-                <box
-                  style={{
-                    flexDirection: "row",
-                    height: 1,
-                    // La fila marcada se resalta con FONDO y no con un color de
-                    // texto: sobre una lista de dos tonos, un tercer tono no se
-                    // distingue de los otros dos.
-                    backgroundColor: puesto() ? C.brand : C.panel,
+              same as the node being inserted"). */}
+          <Index each={filas(visibles(), props.ancho())}>
+            {(fila) => (
+              <box style={{ flexDirection: "row", height: 1 }}>
+                {/* La familia va como etiqueta a la izquierda, en tono de
+                    estructura: dice de qué es cada renglón sin gastarle uno. */}
+                <text style={{ fg: C.faint, flexShrink: 0 }}>
+                  {` ${fila().familia.toUpperCase().slice(0, med().familia - 2).padEnd(med().familia - 1)}`}
+                </text>
+                <Index each={fila().indices}>
+                  {(i) => {
+                    const o = () => visibles()[i()]!
+                    const puesto = () => i() === cursor()
+                    return (
+                      <text
+                        style={{
+                          // El elegido se marca con FONDO. Un tercer color de
+                          // texto sobre un tablero de dos tonos no se distingue.
+                          bg: puesto() ? C.brand : undefined,
+                          fg: puesto() ? C.panel : o().current ? C.brand : C.fg,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {`${o().current ? "●" : " "}${o().title.slice(0, med().celda - 2).padEnd(med().celda - 1)}`}
+                      </text>
+                    )
                   }}
-                >
-                  <text style={{ fg: puesto() ? C.panel : C.fg, flexShrink: 0 }}>
-                    {` ${o().current ? "●" : " "} ${o().title.padEnd(14)}`}
-                  </text>
-                  <text style={{ fg: puesto() ? C.panel : C.dim, flexShrink: 0 }}>
-                    {o().description ?? ""}
-                  </text>
-                </box>
-              )
-            }}
+                </Index>
+              </box>
+            )}
           </Index>
         </Show>
 
-        {/* La línea de filtro es del diálogo, no del campo de escritura: así se
-            puede filtrar sin ensuciar el mensaje que estabas redactando. */}
+        {/* Lo que hace el elegido, en su propio renglón. En un tablero no entra
+            una descripción por celda, y tampoco hace falta: la que importa es
+            la de donde estás parado. */}
         <box style={{ flexDirection: "row", height: 1 }}>
-          <text style={{ fg: C.brand, flexShrink: 0 }}>{` ${activo()!.prefijo ?? ""}`}</text>
-          <text style={{ fg: C.fg, flexShrink: 0 }}>{filtro()}</text>
-          <text style={{ fg: C.brand, flexShrink: 0 }}>{"█"}</text>
-          <box style={{ flexGrow: 1 }} />
-          <text style={{ fg: C.faint, flexShrink: 0 }}>
-            {`${visibles().length} · ↑↓ mover · ⏎ elegir · esc salir `}
+          <text style={{ fg: C.dim, flexShrink: 0 }}>
+            {` ${(visibles()[cursor()]?.description ?? "").slice(0, Math.max(0, props.ancho() - 30))}`}
           </text>
+          <box style={{ flexGrow: 1 }} />
+          {/* El filtro es del diálogo y no del campo de escritura: así se puede
+              buscar sin ensuciar el mensaje que estabas redactando. */}
+          <text style={{ fg: C.faint, flexShrink: 0 }}>
+            {filtro() ? `${activo()!.prefijo ?? ""}${filtro()}` : ""}
+          </text>
+          <text style={{ fg: C.brand, flexShrink: 0 }}>{filtro() ? "█ " : ""}</text>
+          <text style={{ fg: C.faint, flexShrink: 0 }}>{"←→ ⇅ ⏎ esc "}</text>
         </box>
       </box>
     </Show>

@@ -576,7 +576,7 @@ export function App(props: {
           justo sobre el cursor, que es donde el ojo ya está. No puede ir
           después de un scrollbox — en esta versión de OpenTUI el scrollbox se
           queda con todo el alto que sobra y lo de después nunca se dibuja. */}
-      <Picker draftVacio={() => !leerBorrador().trim()} />
+      <Picker draftVacio={() => !leerBorrador().trim()} ancho={cols} />
 
       {/* Los atajos NO van acá: los enseña la pantalla de arranque, que es
           donde uno los lee. Repetirlos en el placeholder los convierte en
