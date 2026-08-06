@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.1
+
+Distribution. 0.3.0 could only be run from a clone; this one installs.
+
+### Added
+
+- **Compiled binaries** that carry the Bun runtime inside — no Bun, no Node, no npm needed
+  on the target machine. Seven targets, including musl for Alpine.
+- **`curl | sh` and `irm | iex` installers.** They detect musl on Linux, because a glibc
+  binary on Alpine does not start and the error does not say why. They do **not** edit
+  anyone's shell profile — they print the PATH line and name the file it goes in.
+- **npm**: `npm i -g packetsmith` or `bun add -g packetsmith`. A Node launcher plus one
+  package per platform as optional dependencies, so npm downloads the ~100 MB that matches
+  your machine instead of all seven.
+- **`packetsmith setup`** as a subcommand. Whoever installs a binary does not have the repo,
+  so `bun run setup` was not an option for them and they had no way to install the MCP.
+- A release workflow that typechecks and tests before building. A broken release is worse
+  than a late one.
+
+### Fixed
+
+- **Three tests passed on Windows and failed on Linux.** `bun test` evaluates every test
+  module in one process, so a module-scope `process.env.X` in one file is visible to the
+  rest, and which one wins depends on file-walk order — which differs by platform.
+- A type error in `scripts/setup.ts` that nobody saw because the file was not in the import
+  graph of anything that got compiled.
+
 ## 0.3.0
 
 The release where PacketSmith stops being an interface for one agent CLI and becomes an
