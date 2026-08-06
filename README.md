@@ -223,9 +223,14 @@ in `/engine` without a line of code per provider.
 
 Every engine emits the same `AgentEvent` union, so the UI never knows which one is running.
 
+**The panel shows what happened, not what was claimed.** It is derived from the raw results
+of the `pt_*` tools — the agent is never asked to emit a structured block for it. So a
+device the model says it created but did not, does not appear.
+
 **Full documentation lives in [`docs/`](docs/)** — [getting started](docs/getting-started.md),
-[providers and plans](docs/providers.md), [commands](docs/commands.md),
-[architecture](docs/architecture.md), [themes](docs/themes.md),
+[commands](docs/commands.md), [providers and plans](docs/providers.md),
+[architecture](docs/architecture.md), [the system prompt](docs/prompt.md),
+[themes](docs/themes.md), [development](docs/development.md),
 [troubleshooting](docs/troubleshooting.md).
 
 ### Measured, not assumed
