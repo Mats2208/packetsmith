@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,24 +59,16 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist
-
-  npm:
-    needs: build
-    runs-on: ubuntu-latest
-    # Sin el token no se intenta: fallar acá dejaría la release a medias, con
-    # los binarios colgados y npm sin publicar.
-    if: ${{ vars.PUBLISH_NPM == 'true' }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist
-
+      # npm se publica ACÁ, en el mismo job, y no en uno aparte.
+      #
+      # Antes había un segundo job que recibía `dist` por artefacto: son ~700 MB
+      # entre los siete binarios, y subirlos mató al runner —"the hosted runner
+      # lost communication with the server"— DESPUÉS de haber colgado todo en la
+      # release. O sea que el run figuraba en rojo con el trabajo hecho.
+      #
+      # Publicar acá evita el viaje de ida y vuelta entero.
       - uses: actions/setup-node@v4
+        if: ${{ vars.PUBLISH_NPM == 'true' }}
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -84,7 +76,8 @@ jobs:
       # Los de plataforma PRIMERO: el paquete que los referencia como
       # dependencias opcionales no puede publicarse antes que ellos, o quien
       # instale en ese hueco se queda sin binario.
-      - name: publicar
+      - name: publicar en npm
+        if: ${{ vars.PUBLISH_NPM == 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
