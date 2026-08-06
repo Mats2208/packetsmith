@@ -467,6 +467,11 @@ export function Chat(props: {
             medio. Con el fondo y el filete del tema se vuelve un riel. */}
         <scrollbox
           style={{ flexGrow: 1 }}
+          // Sin foco: un scrollbox es focusable por defecto, así que un click en
+          // el panel se lo robaba al campo de escritura y a partir de ahí no se
+          // podía tipear nada. La rueda del mouse va por posición, no por foco,
+          // así que scrollear sigue andando igual.
+          focusable={false}
           verticalScrollbarOptions={{
             trackOptions: { backgroundColor: C.bg, foregroundColor: C.line },
           }}

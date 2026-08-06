@@ -196,7 +196,7 @@ export const THEMES: Theme[] = [
   { name: "solarized", label: "Solarized dark", dark: true, colors: solarized },
 ]
 
-export const DEFAULT_THEME = "telemetry"
+export const DEFAULT_THEME = "ice"
 
 export function findTheme(name: string): Theme | undefined {
   return THEMES.find((t) => t.name === name)

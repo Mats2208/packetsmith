@@ -220,6 +220,11 @@ export function Canvas(props: { topology: Topology; lastTool?: string; live?: bo
 
       <scrollbox
         style={{ flexGrow: 1 }}
+        // Sin foco: un scrollbox es focusable por defecto, así que un click en
+        // el panel se lo robaba al campo de escritura y a partir de ahí no se
+        // podía tipear nada. La rueda del mouse va por posición, no por foco,
+        // así que scrollear sigue andando igual.
+        focusable={false}
         verticalScrollbarOptions={{
           trackOptions: { backgroundColor: C.panel, foregroundColor: C.line },
         }}
