@@ -123,7 +123,9 @@ Tagging `v*` builds the seven binaries and attaches them to the release. Publish
 additionally needs a token, loaded once:
 
 ```bash
-bash scripts/npm-token.sh
+bash scripts/npm-token.sh          # macOS, Linux, Git Bash
+.\scripts
+pm-token.ps1            # Windows PowerShell
 ```
 
 It asks for the token without echoing it and pipes it to `gh secret set` — a token passed
