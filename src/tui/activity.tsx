@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // En qué anda el agente, ahora mismo.
 //
 // Antes la única señal de vida era que apareciera texto. Con un modelo que

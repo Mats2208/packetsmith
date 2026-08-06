@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // Panel derecho: la topología, como telemetría.
 //
 // No se muestra la captura PNG de PT a propósito: el dibujo propio funciona en

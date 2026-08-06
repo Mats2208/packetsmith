@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // Las piezas estructurales de la interfaz: reglas, canaletas y arte.
 //
 // Viven aparte porque son lo que hace que las tres zonas se lean como un mismo

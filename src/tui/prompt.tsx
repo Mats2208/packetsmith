@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // El campo de escritura.
 //
 // Era un `<input>` de una línea: al pasarse del ancho el texto se iba corriendo

@@ -1,6 +1,13 @@
 #!/usr/bin/env bun
+/** @jsxImportSource @opentui/solid */
+// La pragma de arriba parece redundante —`tsconfig.json` ya dice
+// `jsxImportSource`— pero no lo es: instalado como paquete, Bun NO lee el
+// tsconfig de adentro de `node_modules`, así que se cae buscando el runtime de
+// React. Comprobado empaquetando e instalando de verdad. La pragma viaja con el
+// archivo y funciona en los dos casos.
 import { render } from "@opentui/solid"
 import { engines, getEngine } from "./engine/index.ts"
+import { PROVIDERS } from "./engine/providers/catalog.ts"
 import { EFFORTS, type Effort } from "./engine/types.ts"
 import { App } from "./tui/app.tsx"
 import { loadConfig } from "./config.ts"
@@ -25,11 +32,20 @@ if (argv.includes("--help") || argv.includes("-h")) {
   // interfaz sí se traduce —eso es `/language`—, pero el `--help` lo lee quien
   // todavía no arrancó la app.
   const col = (s: string) => s.padEnd(20)
+  // Los motores son ~150 —los seis curados más lo que trae models.dev— así que
+  // listarlos todos acá llenaba la pantalla con una línea de dos mil caracteres.
+  // Se nombran los curados y se dice cuántos más hay; el resto se elige con
+  // `/engine`, que filtra mientras tipeás.
+  const curados = ["claude", ...PROVIDERS.map((p) => p.id)]
+  const otros = Object.keys(engines).length - curados.length
   console.log(`
 packetsmith — describe a network in plain language, watch it build itself
 
-  ${col("--engine <name>")}${Object.keys(engines).join(" · ")}            (env PACKETSMITH_ENGINE)
-  ${col("--model <name>")}opus · sonnet · haiku…   (env PACKETSMITH_MODEL)
+  ${col("--engine <name>")}${curados.join(" · ")}
+  ${col("")}+ ${otros} more from models.dev — see /engine
+  ${col("")}                         (env PACKETSMITH_ENGINE)
+  ${col("--model <name>")}whatever the engine offers — see /model
+  ${col("")}                         (env PACKETSMITH_MODEL)
   ${col("--effort <level>")}${EFFORTS.join(" · ")}
   ${col("")}                         (env PACKETSMITH_EFFORT)
   ${col("--language <code>")}${LANGS.join(" · ")}                  (env PACKETSMITH_LANGUAGE)

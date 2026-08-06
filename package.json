@@ -36,6 +36,7 @@
   "files": [
     "src",
     "scripts/setup.ts",
+    "tsconfig.json",
     "AGENTS.md",
     "README.md",
     "LICENSE"

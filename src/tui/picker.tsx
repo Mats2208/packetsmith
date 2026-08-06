@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // La paleta de comandos.
 //
 // Fue un tablero —todos los comandos a la vista, agrupados por familia, en dos

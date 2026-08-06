@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // Composición y estado. Acá vive el ciclo: input → sesión → eventos → UI.
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useRenderer } from "@opentui/solid"
@@ -21,6 +22,7 @@ import { dialog, hayDialogo, Picker, registrarPaleta } from "./picker.tsx"
 import { comandoPorTitulo, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
 import { aplicarEfectos } from "./effects.ts"
 import { guardarModelo, modeloDe, saveConfig } from "../config.ts"
+import pkg from "../../package.json" with { type: "json" }
 import { hayCredencial, planElegido, setApiKey, setOauth, setPlan } from "../auth.ts"
 import { iniciarLogin } from "../engine/providers/oauth-chatgpt.ts"
 
@@ -28,7 +30,10 @@ import { iniciarLogin } from "../engine/providers/oauth-chatgpt.ts"
 const PT_TOOL = /(^|__)pt_/
 
 /** Va en la placa de la cabecera. Se sube a mano con cada release. */
-const REV = "0.2"
+// La versión sale del `package.json` y no de una constante acá: escrita a mano
+// se desincroniza sin que nada falle, y una cabecera que dice una versión
+// distinta de la publicada es peor que no decir ninguna.
+const REV = pkg.version.split(".").slice(0, 2).join(".")
 
 /**
  * Si el puente con Packet Tracer está vivo, leído del texto que devolvió la tool.

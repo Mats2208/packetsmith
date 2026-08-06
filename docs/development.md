@@ -72,6 +72,25 @@ lines that replaced it are in `picker.tsx`.
 | teach the panel a new `pt_*` tool | `src/topology/ingest.ts` |
 | change what the agent knows | `src/engine/prompt.ts` — read [prompt.md](prompt.md) first |
 
+## Before publishing
+
+`bun pm pack`, install the tarball into an empty directory, and **run it**. That is not
+ceremony: the published package was broken and nothing in the repo could have told you.
+
+Bun does **not** read a `tsconfig.json` from inside `node_modules`, so the JSX configuration
+that works perfectly in development did not reach the installed copy and every `.tsx` file
+fell back to looking for React's runtime. The fix is a per-file
+`/** @jsxImportSource @opentui/solid */` pragma, which travels with the source and works in
+both places. Keep it on every `.tsx` file you add.
+
+```bash
+bun pm pack --destination /tmp/p
+cd /tmp/p && mkdir prueba && cd prueba
+echo '{"name":"x","private":true}' > package.json
+bun add file:../packetsmith-*.tgz
+bun ./node_modules/packetsmith/src/index.tsx --help
+```
+
 ## Both platforms, every time
 
 The project is developed on macOS **and** Windows. A change that only ever runs on one is

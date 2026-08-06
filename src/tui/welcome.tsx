@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // La primera pantalla.
 //
 // Antes era el wordmark, un diagrama y una línea de texto, todo pegado al

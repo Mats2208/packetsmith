@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 // Panel izquierdo: la conversación. Presentación pura — quien corre el motor
 // y arma los turnos es app.tsx.
 import { For, Show } from "solid-js"
