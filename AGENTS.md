@@ -98,6 +98,43 @@ with `customBorderChars` gives a single rule instead of a box.
 `{ kittyKeyboard: true }` to exercise modifier-aware bindings. Input behaviour is testable —
 test it, because every trap above was found that way and none of them is visible to `tsc`.
 
+## The argv trap that silently unconfigured everything
+
+**This one is Windows-only, and that is exactly why it survived.** On macOS and Linux
+`claude` is a real executable and everything below works as written; the project is
+developed on macOS, so nothing here ever looked broken.
+
+On Windows, `npm i -g` does not put an executable on the `PATH` — it puts a `.cmd`
+shim that forwards `%*`. **cmd.exe cannot carry a newline inside an argument:** it
+truncates the command line there and drops everything after it.
+
+`--append-system-prompt` takes a multi-line value. While it sat in the middle of the
+argument list, everything after it was silently lost:
+
+| Flag | What its loss looked like |
+|---|---|
+| `--mcp-config` / `--strict-mcp-config` | all 11 of the user's MCP servers loaded — 315 tools, 219 of them foreign |
+| `--model` | asked for `sonnet`, got the default |
+| `--allowedTools` | no allowlist at all |
+
+Nothing errored. Measured on Windows: `1 server / 96 tools / 0 foreign` after the fix,
+against `11 / 315 / 219` before.
+
+**Both platforms, every time.** A change that only ever runs on the author's machine
+is how this stayed hidden through several releases. `bun test` covers the split with
+`resolveBin`'s platform argument, so at minimum assert the other OS instead of assuming
+it.
+
+Two rules come out of it, and both are load-bearing:
+
+- **spawn the real executable, not the shim** (`resolveBin` in `src/engine/claude.ts`);
+- **any argument whose value can contain a newline goes LAST.** Then the worst case is
+  that argument truncating itself, not taking four others with it.
+
+If you add a flag, add it *before* `--append-system-prompt`, and check it actually
+arrived — pass a deliberately invalid value and confirm the CLI complains. A flag that
+never reaches the CLI fails the same way this one did: perfectly quietly.
+
 ## What the CLI already tells you
 
 Claude Code's `stream-json` carries far more than text and tool calls. These were all being
@@ -157,6 +194,21 @@ The `⏱` line under any turn over 20s splits it: time in Packet Tracer vs time 
 Read it before optimizing anything.
 
 ## Two views of the same network, on purpose
+
+### What real Packet Tracer output has that a fixture does not
+
+Two things bit here, both from a stock PT 9.0 workspace, neither present in the
+hand-written fixture:
+
+- **Device names contain spaces.** `PC Ventas` is an ordinary name. A `\S+` in the
+  device regex did not just drop the device — the *port* line below it still matched,
+  so its interfaces and IPs were attributed to the device above. The panel showed one
+  machine's address on another. Any parser change here gets tested against
+  `EXPORT_REAL` in `test/topology.test.ts`, which is literal PT output.
+- **PT adds its own pseudo-device.** Every topology carries a
+  `Power Distribution Device0` at `(3899, 3900)`. It is not part of the network and it
+  is far outside the usable canvas, so including it flattens the whole plan into one
+  corner — the span becomes 3900 and every real device lands in the same column.
 
 `src/topology/tree.ts` answers **what hangs off what** — the sidebar tree.
 `src/topology/map.ts` answers **how it is laid out** — a plan drawn from the real `x, y` of
