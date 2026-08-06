@@ -312,6 +312,20 @@ export function App(props: {
   function submit(text: string) {
     if (!session) return
     setTurns((t) => [...t, { role: "user", text }])
+
+    // Si el CLI ya murió, el mensaje no llega a ningún lado. Antes se mandaba
+    // igual —escribir en el stdin de un proceso muerto no tira—, la app se
+    // ponía en "trabajando", y se quedaba así para siempre: sin eventos que
+    // esperar, nada volvía a poner `busy` en falso y el campo de escritura
+    // quedaba bloqueado. Decirlo y no bloquear nada es todo lo que hace falta.
+    if (!session.send(text)) {
+      setTurns((t) => [...t, {
+        role: "agent",
+        text: "⚠ la sesión con el agente terminó. Reiniciá PacketSmith para seguir.",
+      }])
+      return
+    }
+
     setBusy(true)
     setStreaming("")
     // El reloj arranca acá y no al primer evento: lo que se quiere medir es
@@ -319,7 +333,6 @@ export function App(props: {
     setStartedAt(Date.now())
     setElapsed(0)
     setPhase("requesting")
-    session.send(text)
   }
 
   return (

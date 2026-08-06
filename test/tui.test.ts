@@ -5,8 +5,9 @@ import { expect, test, describe } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { Chat, columnWidths, shortToolName, summarizeTools, timingLine, type Turn } from "../src/tui/chat.tsx"
 import { Canvas, guide } from "../src/tui/canvas.tsx"
-import { bridgeIsUp } from "../src/tui/app.tsx"
+import { App, bridgeIsUp } from "../src/tui/app.tsx"
 import type { Topology } from "../src/topology/model.ts"
+import type { AgentEvent, Engine } from "../src/engine/types.ts"
 import { EMPTY } from "../src/topology/ingest.ts"
 
 async function frameOf(node: () => any, width = 70, height = 14): Promise<string> {
@@ -240,6 +241,43 @@ describe("Canvas", () => {
   test("resume el tamaño de la red en el encabezado", async () => {
     const frame = await frameOf(() => Canvas({ topology: TOPO, lastTool: "pt_full_build" }), 46, 14)
     expect(frame).toContain("3 NODES · 2 LINKS")
+  })
+})
+
+describe("cuando el CLI se muere", () => {
+  /** Un motor cuyo CLI murió: emite el error y no acepta un mensaje más. */
+  const muerto = (): Engine => ({
+    name: "claude",
+    start: () => ({
+      send: () => false,
+      async *events(): AsyncIterable<AgentEvent> {
+        yield { type: "error", message: "claude terminó: no estás autenticado" }
+      },
+      close() {},
+    }),
+  })
+
+  test("un mensaje sobre la sesión muerta lo DICE, no deja la app tildada", async () => {
+    // El bug: escribir en el stdin de un proceso muerto no tira, así que el
+    // mensaje se perdía en silencio. La app se ponía en "trabajando" esperando
+    // eventos que no iban a llegar nunca y quedaba así para siempre, con el
+    // campo de escritura bloqueado. Bricked, con el spinner girando.
+    process.env.PACKETSMITH_NO_QUOTA = "1"
+    const setup = await testRender(
+      () => App({ engine: muerto(), columns: 90, quota: { session: 10 } }),
+      { width: 90, height: 24 },
+    )
+    await new Promise((r) => setTimeout(r, 60))
+
+    setup.mockInput.typeText("otra vez")
+    setup.mockInput.pressEnter()
+    await new Promise((r) => setTimeout(r, 60))
+    await setup.renderOnce()
+
+    const frame = await setup.captureCharFrame()
+    expect(frame).toContain("la sesión con el agente terminó")
+    // Y sobre todo: el campo sigue disponible, no bloqueado esperando a nadie.
+    expect(frame).not.toContain("el agente está trabajando")
   })
 })
 

@@ -4,7 +4,6 @@ import { For, Show } from "solid-js"
 import type { Topology } from "../topology/model.ts"
 import { drawMap, naturalWidth, type Ink } from "../topology/map.ts"
 import { C } from "./theme.ts"
-import { rule } from "./ascii.ts"
 import { GUTTER } from "./frame.tsx"
 import { Welcome } from "./welcome.tsx"
 

@@ -46,7 +46,7 @@ function benchEngine(events: AgentEvent[]): Engine {
     name: "claude",
     start() {
       return {
-        send() {},
+        send: () => true,
         async *events() {
           for (const e of events) yield e
           done = performance.now()

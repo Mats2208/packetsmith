@@ -14,7 +14,7 @@ function fakeEngine(events: AgentEvent[]): Engine {
     name: "claude",
     start() {
       return {
-        send() {},
+        send: () => true,
         async *events() {
           for (const e of events) yield e
           await new Promise(() => {})
