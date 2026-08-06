@@ -75,8 +75,16 @@ export type AgentEvent =
  * responder mientras el agente todavía trabaja.
  */
 export interface Session {
-  /** Encola un mensaje del usuario. No espera: la respuesta llega por `events`. */
-  send(text: string): void
+  /**
+   * Encola un mensaje del usuario. No espera: la respuesta llega por `events`.
+   *
+   * Devuelve `false` si la sesión ya no acepta mensajes porque el CLI murió.
+   * Escribir en el stdin de un proceso muerto NO tira —se probó—, así que sin
+   * este valor de retorno el mensaje se perdía en silencio: la UI lo mostraba
+   * como enviado, se ponía a esperar una respuesta que no iba a llegar nunca, y
+   * quedaba tildada con el campo de escritura bloqueado.
+   */
+  send(text: string): boolean
   /** Stream único de eventos de toda la conversación. */
   events(): AsyncIterable<AgentEvent>
   close(): void

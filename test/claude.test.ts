@@ -2,11 +2,16 @@
 // (2026-08), incluida una línea de banner no-JSON en el medio: los CLIs
 // mezclan avisos con su salida estructurada y el parser tiene que sobrevivir.
 import { expect, test, describe } from "bun:test"
+import { join } from "node:path"
 import { jsonLines } from "../src/engine/stream.ts"
-import { buildArgs, translate } from "../src/engine/claude.ts"
+import { buildArgs, resolveBin, translate } from "../src/engine/claude.ts"
 import type { AgentEvent } from "../src/engine/types.ts"
 
-const FIXTURE = new URL("./fixtures/claude-stream.ndjson", import.meta.url).pathname
+// `import.meta.dir` y no `new URL(...).pathname`: en Windows esa propiedad
+// devuelve "/E:/PROYECTOS/..." —con la barra de más adelante de la letra de
+// unidad— y `Bun.file` no lo puede abrir. Los cinco tests de este bloque
+// fallaban con ENOENT en cualquier máquina Windows.
+const FIXTURE = join(import.meta.dir, "fixtures", "claude-stream.ndjson")
 
 function streamOf(text: string): ReadableStream<Uint8Array> {
   return new Response(text).body!
@@ -48,6 +53,59 @@ describe("buildArgs", () => {
 
   test("pasa el modelo cuando se elige", () => {
     expect(buildArgs({ model: "opus" })[buildArgs({ model: "opus" }).indexOf("--model") + 1]).toBe("opus")
+  })
+
+  test("el prompt multilínea va ÚLTIMO, después de todo lo demás", () => {
+    // No es cosmético. El valor de --append-system-prompt tiene saltos de línea,
+    // y detrás de un shim .cmd (el que deja npm en Windows) cmd.exe corta la
+    // línea de comandos en el primer salto y pierde TODO lo que siga. Con el
+    // prompt en el medio, ahí se iban --mcp-config, --strict-mcp-config,
+    // --model y --allowedTools: el agente arrancaba con todos los servidores
+    // MCP del usuario y el modelo por defecto, en silencio.
+    const args = buildArgs({
+      model: "opus",
+      allowedTools: ["Read"],
+      mcpArgs: ["--mcp-config", "/tmp/x.json", "--strict-mcp-config"],
+    })
+    expect(args.indexOf("--append-system-prompt")).toBe(args.length - 2)
+    expect(args[args.length - 1]).toContain("\n")
+    // Y todo lo que importa quedó ANTES.
+    for (const flag of ["--mcp-config", "--strict-mcp-config", "--model", "--allowedTools"]) {
+      expect(args.indexOf(flag)).toBeLessThan(args.indexOf("--append-system-prompt"))
+    }
+  })
+})
+
+describe("resolveBin", () => {
+  // `npm i -g` deja un shim .cmd, no un ejecutable. Ese shim reenvía con `%*`
+  // y cmd.exe no sabe pasar un argumento con saltos de línea.
+  test("en Windows se salta el shim si el ejecutable real está", () => {
+    const bin = resolveBin(
+      () => "C:\\nvm4w\\nodejs\\claude.cmd",
+      () => true,
+      "win32",
+    )
+    expect(bin.endsWith("claude.exe")).toBe(true)
+    expect(bin).toContain("@anthropic-ai")
+  })
+
+  test("si el ejecutable real no está, se queda con el shim", () => {
+    // Peor arrancar con el shim que no arrancar.
+    expect(resolveBin(() => "C:\\x\\claude.cmd", () => false, "win32")).toBe("C:\\x\\claude.cmd")
+  })
+
+  test("fuera de Windows no toca nada", () => {
+    // En macOS y Linux `claude` es un ejecutable de verdad, no un shim, así que
+    // el problema no existe y acá no hay nada que corregir. Se prueba explícito
+    // porque este proyecto se desarrolla en macOS: un cambio pensado para
+    // Windows no tiene derecho a mover el comportamiento del otro lado.
+    for (const so of ["darwin", "linux"] as const) {
+      expect(resolveBin(() => "/usr/local/bin/claude", () => true, so)).toBe("/usr/local/bin/claude")
+    }
+  })
+
+  test("si no está en el PATH se intenta igual con el nombre pelado", () => {
+    expect(resolveBin(() => null, () => false, "win32")).toBe("claude")
   })
 })
 
@@ -111,5 +169,25 @@ describe("translate", () => {
     for (const t of ["rate_limit_event", "message_stop"]) {
       expect([...translate({ type: t }, new Map())]).toHaveLength(0)
     }
+  })
+})
+
+describe("líneas que el parser no puede leer", () => {
+  // `jsonLines` acepta un `onSkip` justamente para no tragarse nada en
+  // silencio, y no lo llamaba nadie. La distinción importa: un banner es
+  // normal y no hay que avisarlo, un JSON cortado es un evento PERDIDO.
+  test("un banner no es un error, un JSON cortado sí", async () => {
+    const avisados: string[] = []
+    const stream = streamOf(
+      '{"type":"system","subtype":"init","session_id":"s","model":"m","tools":[]}\n' +
+      "Nueva versión de claude disponible: 2.2.0\n" +
+      '{"type":"result","total_cost\n',
+    )
+    for await (const _ of jsonLines(stream, (l) => {
+      if (l.trimStart().startsWith("{")) avisados.push(l)
+    })) { /* drenar */ }
+
+    expect(avisados).toHaveLength(1)
+    expect(avisados[0]).toContain("total_cost")
   })
 })
