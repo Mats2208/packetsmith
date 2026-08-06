@@ -87,6 +87,21 @@ This is not a bug we can fix here — it is how the MCP's HTTP bridge works. Clo
 clients before using PacketSmith. When testing the topology pipeline while another client
 holds the port, use the fixture in `test/topology.test.ts` instead of a live export.
 
+### Tests share one process
+
+`bun test` evaluates **every** test module in the same process before running anything, so a
+`process.env.X = "1"` at module scope in one file is visible to all the others. Whether it
+gets there first depends on the order files are walked — which is **not** the same on
+Windows and Linux.
+
+That is how three tests passed locally and failed in CI: they needed the usage meter on,
+another file turned it off with `PACKETSMITH_NO_QUOTA`, and only Linux ordered the files
+such that it won. A test that depends on the environment another file left behind is not
+testing what it says it is.
+
+If a test needs a specific environment, it takes it in `beforeEach` and gives it back in
+`afterEach`. Not setting the variable is not the same as it not being set.
+
 ## OpenTUI traps, measured
 
 Every one of these cost a rendering session to find, and none of them is visible to

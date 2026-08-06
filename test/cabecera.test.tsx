@@ -10,7 +10,7 @@
 //   · el medidor se montaba una sola vez, así que después de cambiar de motor
 //     seguía mostrando el consumo del anterior — un número de otro plan
 //     presentado como si fuera de este.
-import { expect, test, describe, afterEach } from "bun:test"
+import { expect, test, describe, afterEach, beforeEach } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { App } from "../src/tui/app.tsx"
 import { dialog } from "../src/tui/picker.tsx"
@@ -18,6 +18,25 @@ import type { AgentEvent, Engine } from "../src/engine/types.ts"
 import type { Medida } from "../src/engine/providers/usage.ts"
 
 afterEach(() => dialog.cerrarTodo())
+
+// Estos tests necesitan el medidor ENCENDIDO, y `PACKETSMITH_NO_QUOTA` lo apaga.
+//
+// No alcanza con no ponerla: otros tres archivos de test la ponen a nivel de
+// módulo, y Bun evalúa todos los módulos en el MISMO proceso antes de correr
+// nada. Si alguno de ellos se evalúa primero, acá llega puesta.
+//
+// Eso hacía que estos tres pasaran en Windows y fallaran en Linux, porque el
+// orden en que se recorren los archivos no es el mismo. Un test que depende del
+// entorno que dejó otro archivo no está probando lo que dice probar.
+let previo: string | undefined
+beforeEach(() => {
+  previo = process.env.PACKETSMITH_NO_QUOTA
+  delete process.env.PACKETSMITH_NO_QUOTA
+})
+afterEach(() => {
+  if (previo === undefined) delete process.env.PACKETSMITH_NO_QUOTA
+  else process.env.PACKETSMITH_NO_QUOTA = previo
+})
 
 /** Un motor de mentira que informa lo que se le diga. */
 function motorFalso(opts: {
