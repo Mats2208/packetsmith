@@ -1,26 +1,26 @@
-// Registry de motores. Agregar uno = un archivo + una línea acá.
+// Registry de motores.
 //
-// Los dos que hay no son variantes del mismo diseño, y conviene tenerlo claro:
+// Los que hay son de DOS clases distintas, y conviene tenerlo claro:
 //
 //   · `claude` ENVUELVE un agente que ya existe. El CLI hace el bucle, habla
 //     con el MCP y resuelve permisos; nosotros leemos su stream. Es el único
 //     camino para aprovechar una suscripción Pro/Max, porque esa suscripción no
 //     tiene API — ni opencode encontró la vuelta.
-//   · `kimi` ES el agente. Levanta el MCP, corre el bucle y habla HTTP directo.
-//     A cambio pide una API key, y da a cambio el prompt de sistema entero, las
-//     tools que elijamos y un bucle que se puede mirar por dentro.
+//   · Los demás SON el agente. Levantan el MCP, corren el bucle y hablan HTTP
+//     directo. Piden una API key, y dan a cambio el prompt de sistema entero,
+//     las tools que elijamos y un bucle que se puede mirar por dentro. Salen
+//     todos de una tabla —`providers/catalog.ts`— porque hablan el mismo
+//     protocolo: agregar uno cuesta cinco líneas.
 //
-// Los dos emiten el mismo `AgentEvent`, así que la interfaz no sabe cuál corre.
+// Todos emiten el mismo `AgentEvent`, así que la interfaz no sabe cuál corre.
 import type { Engine } from "./types.ts"
 import { claude } from "./claude.ts"
-import { kimi } from "./kimi.ts"
+import { MOTORES_HTTP } from "./openai-engine.ts"
 
-export const engines = { claude, kimi } satisfies Record<string, Engine>
-
-export type EngineName = keyof typeof engines
+export const engines: Record<string, Engine> = { claude, ...MOTORES_HTTP }
 
 export function getEngine(name: string): Engine {
-  const e = engines[name as EngineName]
+  const e = engines[name]
   if (!e) {
     throw new Error(
       `Motor desconocido: "${name}". Disponibles: ${Object.keys(engines).join(", ")}`,

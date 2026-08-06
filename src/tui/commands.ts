@@ -10,6 +10,7 @@
 import { EFFORTS, type Effort } from "../engine/types.ts"
 import { THEMES } from "./themes.ts"
 import { LANGS, T, type Lang } from "./i18n.ts"
+import { findProvider, PROVIDERS } from "../engine/providers/catalog.ts"
 import { dialog, type Opcion } from "./picker.tsx"
 
 /** Lo que un comando puede tocar de la app. Lo arma `app.tsx`. */
@@ -38,6 +39,10 @@ export interface CommandCtx {
   exportar(): string
   /** Cambia de motor. Empieza limpio: modelo y sesión son del motor viejo. */
   cambiarMotor(nombre: string): void
+  /** Guarda la API key de un proveedor. Devuelve si se pudo escribir. */
+  guardarKey(provider: string, key: string): boolean
+  /** Si ya hay key para ese proveedor. Nunca devuelve la key. */
+  hayKey(provider: string): boolean
   /** Los modelos del motor EN USO. Los de Claude no existen en Kimi. */
   modelosDelMotor(): { value: string; description?: string }[]
   idioma: {
@@ -151,6 +156,40 @@ export const COMMANDS: Command[] = [
     name: "session.clear",
     category: "agente",
     run: (ctx) => ctx.limpiar(),
+  },
+  {
+    // Conectar un proveedor sin salir de acá.
+    //
+    // Antes la única forma era editar `~/.packetsmith/auth.json` a mano, que es
+    // exactamente lo que esta app existe para no tener que hacer.
+    name: "app.connect",
+    category: "agente",
+    run(ctx) {
+      dialog.abrir({
+        titulo: T.tituloProveedor,
+        opciones: PROVIDERS.map((p) => opcion({
+          value: p.id,
+          title: p.id,
+          description: ctx.hayKey(p.id) ? `${p.label} — ${T.conectado}` : p.label,
+          current: ctx.hayKey(p.id),
+        })),
+        onElegir(o) {
+          const p = findProvider(o.value)!
+          dialog.abrir({
+            titulo: p.id,
+            opciones: [],
+            escribir: {
+              ayuda: T.pegaLaKey(p.consola),
+              secreto: true,
+              onAceptar(key) {
+                if (!ctx.guardarKey(p.id, key)) { ctx.decir(T.noSePudoGuardar); return }
+                ctx.decir(T.keyGuardada(p.label, p.id))
+              },
+            },
+          })
+        },
+      })
+    },
   },
 
   // ── Apariencia ──────────────────────────────────────────────────────────

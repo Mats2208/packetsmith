@@ -21,6 +21,7 @@ import { dialog, hayDialogo, Picker, registrarPaleta } from "./picker.tsx"
 import { comandoPorTitulo, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
 import { aplicarEfectos } from "./effects.ts"
 import { saveConfig } from "../config.ts"
+import { apiKey, setApiKey } from "../auth.ts"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
@@ -444,6 +445,9 @@ export function App(props: {
       saveConfig({ engine: nombre })
     },
     modelosDelMotor: () => motor().models?.() ?? [],
+    guardarKey: (provider, key) => setApiKey(provider, key),
+    // Devuelve SI hay key, nunca cuál. La key no sale de `auth.ts`.
+    hayKey: (provider) => Boolean(apiKey(provider)),
     idioma: {
       actual: idioma,
       poner(l) {

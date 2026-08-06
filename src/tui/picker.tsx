@@ -14,9 +14,10 @@
 // escritura no pierde el foco ni se entera — no hay que sacárselo y devolverlo,
 // que es donde estas cosas se rompen.
 import { createMemo, createSignal, Index, Show } from "solid-js"
-import { useKeyboard } from "@opentui/solid"
-import type { KeyEvent } from "@opentui/core"
+import { useKeyboard, usePaste } from "@opentui/solid"
+import type { KeyEvent, PasteEvent } from "@opentui/core"
 import { bracket, C } from "./theme.ts"
+import { T } from "./i18n.ts"
 
 export interface Opcion {
   /** Lo que se tipea o elige. Es lo que vuelve en `onElegir`. */
@@ -35,7 +36,8 @@ export interface Dialogo {
   /** Va en el marco. Dice qué se está eligiendo. */
   titulo: string
   opciones: Opcion[]
-  onElegir: (o: Opcion) => void
+  /** Opcional: un diálogo de ESCRIBIR no tiene nada que elegir. */
+  onElegir?: (o: Opcion) => void
   /**
    * Se llama al MOVERSE, antes de elegir. Es lo que permite previsualizar un
    * tema mientras se recorre la lista en vez de tener que confirmarlo para ver
@@ -46,6 +48,32 @@ export interface Dialogo {
   onCancelar?: () => void
   /** Prefijo de la línea de filtro. `/` para la paleta, vacío para el resto. */
   prefijo?: string
+  /**
+   * Convierte el diálogo en uno de ESCRIBIR en vez de elegir.
+   *
+   * Existe por una razón concreta: pegar una API key. Mandar a alguien a editar
+   * un archivo a mano es justo lo que esta app está para evitar, y sin esto
+   * `/connect` no podía existir.
+   */
+  escribir?: {
+    /** Qué se pide, en una línea. */
+    ayuda: string
+    /** Se dibuja con puntos y solo se muestran los últimos cuatro. */
+    secreto?: boolean
+    onAceptar(valor: string): void
+  }
+}
+
+/**
+ * Un secreto, dibujado.
+ *
+ * Se ven los últimos cuatro caracteres y nada más. Ocultarlo entero deja sin
+ * forma de notar que se pegó de más o de menos; mostrarlo entero lo deja en
+ * pantalla, que es donde no tiene que estar.
+ */
+export function enmascarar(v: string): string {
+  if (v.length <= 4) return "•".repeat(v.length)
+  return "•".repeat(Math.min(v.length - 4, 24)) + v.slice(-4)
 }
 
 // ── La pila ────────────────────────────────────────────────────────────────
@@ -314,7 +342,7 @@ export function Picker(props: {
     // encontrar la pila sin el suyo. Al revés se cerraba el que él acababa de
     // abrir y no pasaba nada, que es un bug precioso de diagnosticar.
     dialog.cerrar()
-    d.onElegir(o)
+    d.onElegir?.(o)
   }
 
   useKeyboard((k: KeyEvent) => {
@@ -333,6 +361,24 @@ export function Picker(props: {
     // Con un diálogo abierto TODO se atiende acá. Si algo se escapara, iría al
     // campo de escritura, que sigue con el foco puesto.
     k.preventDefault()
+
+    // Escribir es otro juego: no hay lista que recorrer y Enter confirma.
+    const esc = activo()?.escribir
+    if (esc) {
+      if (k.name === "escape") { dialog.cerrar(true); return }
+      if (k.name === "return" || k.name === "kpenter") {
+        const v = filtro().trim()
+        if (!v) return
+        dialog.cerrar()
+        esc.onAceptar(v)
+        return
+      }
+      if (k.name === "backspace") { setFiltro((f) => f.slice(0, -1)); return }
+      if (k.sequence && k.sequence.length === 1 && k.sequence >= " " && !k.ctrl && !k.meta) {
+        setFiltro((f) => f + k.sequence)
+      }
+      return
+    }
 
     switch (k.name) {
       case "escape": dialog.cerrar(true); return
@@ -366,6 +412,17 @@ export function Picker(props: {
     }
   })
 
+  // Una API key se PEGA. El pegado llega como un evento propio y no como una
+  // ráfaga de teclas, así que sin esto el diálogo de escribir quedaba vacío.
+  usePaste((ev: PasteEvent) => {
+    if (!activo()?.escribir) return
+    // El pegado llega como bytes crudos, no como texto: hay que decodificarlo.
+    // Y se le sacan espacios y saltos, porque una key copiada de una web suele
+    // venir con un salto al final y eso ya no es la misma cadena.
+    const texto = new TextDecoder().decode(ev.bytes).replace(/\s+/g, "")
+    if (texto) setFiltro((f) => f + texto)
+  })
+
   return (
     <Show when={activo()}>
       {/* Va ARRIBA del campo de escritura y debajo de la barra de estado. No
@@ -388,12 +445,30 @@ export function Picker(props: {
         title={` ${bracket(activo()!.titulo)} `}
         titleAlignment="left"
       >
+        {/* Modo escribir: ni tablero ni filtro, una línea y listo. */}
+        <Show when={activo()!.escribir}>
+          <box style={{ flexDirection: "row", height: 1 }}>
+            <text style={{ fg: C.brand, flexShrink: 0 }}>{"  › "}</text>
+            <text style={{ fg: C.fg, flexShrink: 0 }}>
+              {activo()!.escribir!.secreto ? enmascarar(filtro()) : filtro()}
+            </text>
+            <text style={{ fg: C.brand, flexShrink: 0 }}>{"█"}</text>
+          </box>
+          <box style={{ flexDirection: "row", height: 1 }}>
+            <text style={{ fg: C.dim, flexShrink: 0 }}>{`  ${activo()!.escribir!.ayuda}`}</text>
+            <box style={{ flexGrow: 1 }} />
+            <text style={{ fg: C.faint, flexShrink: 0 }}>{"⏎ esc "}</text>
+          </box>
+        </Show>
+
         <Show
-          when={visibles().length}
+          when={!activo()!.escribir && visibles().length}
           fallback={
-            <box style={{ height: 1 }}>
-              <text style={{ fg: C.faint }}>{"  nada coincide"}</text>
-            </box>
+            <Show when={!activo()!.escribir}>
+              <box style={{ height: 1 }}>
+                <text style={{ fg: C.faint }}>{T.nadaCoincide}</text>
+              </box>
+            </Show>
           }
         >
           {/* `Index` y no `For`: los renglones son POSICIONES, no identidades.
@@ -446,6 +521,7 @@ export function Picker(props: {
         {/* Lo que hace el elegido, en su propio renglón. En un tablero no entra
             una descripción por celda, y tampoco hace falta: la que importa es
             la de donde estás parado. */}
+        <Show when={!activo()!.escribir}>
         <box style={{ flexDirection: "row", height: 1 }}>
           <text style={{ fg: C.dim, flexShrink: 0 }}>
             {` ${(visibles()[cursor()]?.description ?? "").slice(0, Math.max(0, props.ancho() - 30))}`}
@@ -457,8 +533,9 @@ export function Picker(props: {
             {filtro() ? `${activo()!.prefijo ?? ""}${filtro()}` : ""}
           </text>
           <text style={{ fg: C.brand, flexShrink: 0 }}>{filtro() ? "█ " : ""}</text>
-          <text style={{ fg: C.faint, flexShrink: 0 }}>{"←→ ⇅ ⏎ esc "}</text>
+          <text style={{ fg: C.faint, flexShrink: 0 }}>{T.ayudaTeclas}</text>
         </box>
+        </Show>
       </box>
     </Show>
   )

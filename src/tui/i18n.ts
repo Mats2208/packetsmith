@@ -72,6 +72,11 @@ export interface Textos {
   tituloEsfuerzo: string
   tituloMotor: string
   tituloIdioma: string
+  tituloProveedor: string
+  conectado: string
+  pegaLaKey: (consola: string) => string
+  keyGuardada: (label: string, id: string) => string
+  noSePudoGuardar: string
 
   // ── Comandos ─────────────────────────────────────────────────────────────
   cat: Record<"agente" | "apariencia" | "pt" | "utilidad", string>
@@ -155,6 +160,11 @@ const es: Textos = {
   tituloEsfuerzo: "esfuerzo",
   tituloMotor: "motor",
   tituloIdioma: "idioma",
+  tituloProveedor: "proveedor",
+  conectado: "conectado",
+  pegaLaKey: (c) => `pegá la API key y dale ⏎. Se sacan en ${c}`,
+  keyGuardada: (l, id) => `Key de **${l}** guardada. Usala con \`/engine\` → \`${id}\`.`,
+  noSePudoGuardar: "No se pudo escribir la key. Revisá los permisos de `~/.packetsmith`.",
 
   cat: { agente: "agente", apariencia: "apariencia", pt: "packet tracer", utilidad: "utilidad" },
   cmd: {
@@ -165,6 +175,7 @@ const es: Textos = {
     "theme.list": { title: "/theme", desc: "cambiar la paleta, con vista previa" },
     "theme.effects": { title: "/effects", desc: "scanlines y viñeta de monitor CRT" },
     "app.language": { title: "/language", desc: "idioma de la interfaz y de las respuestas" },
+    "app.connect": { title: "/connect", desc: "poner la API key de un proveedor" },
     "pt.topology": { title: "/topology", desc: "releer la topología y repoblar el panel" },
     "pt.bridge": { title: "/bridge", desc: "comprobar el puente con Packet Tracer" },
     "app.help": { title: "/help", desc: "qué comandos hay" },
@@ -269,6 +280,11 @@ const en: Textos = {
   tituloEsfuerzo: "effort",
   tituloMotor: "engine",
   tituloIdioma: "language",
+  tituloProveedor: "provider",
+  conectado: "connected",
+  pegaLaKey: (c) => `paste the API key and hit ⏎. Get one at ${c}`,
+  keyGuardada: (l, id) => `**${l}** key saved. Use it with \`/engine\` → \`${id}\`.`,
+  noSePudoGuardar: "Could not write the key. Check the permissions on `~/.packetsmith`.",
 
   cat: { agente: "agent", apariencia: "appearance", pt: "packet tracer", utilidad: "utility" },
   cmd: {
@@ -279,6 +295,7 @@ const en: Textos = {
     "theme.list": { title: "/theme", desc: "switch palette, with live preview" },
     "theme.effects": { title: "/effects", desc: "CRT scanlines and vignette" },
     "app.language": { title: "/language", desc: "interface and reply language" },
+    "app.connect": { title: "/connect", desc: "set a provider's API key" },
     "pt.topology": { title: "/topology", desc: "re-read the topology and refill the panel" },
     "pt.bridge": { title: "/bridge", desc: "check the bridge to Packet Tracer" },
     "app.help": { title: "/help", desc: "what commands there are" },

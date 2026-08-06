@@ -13,17 +13,13 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
+import { findProvider } from "./engine/providers/catalog.ts"
 
 export const AUTH_PATH = join(homedir(), ".packetsmith", "auth.json")
 
-/** De qué variables de entorno se acepta la key de cada proveedor. */
-const ENV: Record<string, string[]> = {
-  kimi: ["PACKETSMITH_KIMI_KEY", "MOONSHOT_API_KEY", "KIMI_API_KEY"],
-}
-
 /** La key de un proveedor, o undefined. Entorno primero, después el archivo. */
 export function apiKey(provider: string, path = AUTH_PATH): string | undefined {
-  for (const v of ENV[provider] ?? []) {
+  for (const v of findProvider(provider)?.env ?? []) {
     const val = process.env[v]
     if (val) return val
   }
@@ -57,6 +53,18 @@ export function setApiKey(provider: string, key: string, path = AUTH_PATH): bool
 
 /** De dónde saldría la key, para poder explicarlo sin mostrarla. */
 export function dondeBuscar(provider: string): string {
-  const vars = (ENV[provider] ?? []).join(", ")
+  const vars = (findProvider(provider)?.env ?? []).join(", ")
   return vars ? `${vars} o ${AUTH_PATH}` : AUTH_PATH
+}
+
+/** Borra la key de un proveedor. Para desconectar sin editar archivos. */
+export function clearApiKey(provider: string, path = AUTH_PATH): boolean {
+  try {
+    const j = JSON.parse(readFileSync(path, "utf8"))
+    delete j[provider]
+    writeFileSync(path, JSON.stringify(j, null, 2) + "\n", { mode: 0o600 })
+    return true
+  } catch {
+    return false
+  }
 }
