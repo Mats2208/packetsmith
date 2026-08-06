@@ -1,0 +1,58 @@
+<!doctype html><meta charset="utf-8">
+<!--
+  El banner del README, compuesto.
+
+  El arte (`banner-art.png`) está generado; el texto NO. Un generador de imágenes
+  escribe mal, y acá el texto es el banner: la marca y la promesa. Así que el
+  arte va de fondo y el wordmark se dibuja con tipografía de verdad, que además
+  queda nítido a cualquier tamaño.
+
+  Para rehacerlo: servir esta carpeta por HTTP —el navegador no abre file://— y
+  fotografiar la región 1800×472 desde el origen. El PNG resultante va a
+  `docs/banner.png`.
+-->
+<style>
+  html,body{margin:0;padding:0;background:#000}
+  .banner{
+    position:relative;width:1800px;height:472px;overflow:hidden;
+    background:#0A0A0A;
+  }
+  /* El arte va a la izquierda y se desvanece hacia el centro: la mitad derecha
+     tiene que quedar negra de verdad para que el wordmark respire. */
+  .art{
+    position:absolute;left:-24px;top:-112px;height:760px;
+    -webkit-mask-image:linear-gradient(to right,#000 0 54%,transparent 78%);
+            mask-image:linear-gradient(to right,#000 0 54%,transparent 78%);
+  }
+  .texto{
+    position:absolute;right:64px;top:0;height:472px;
+    display:flex;flex-direction:column;justify-content:center;align-items:flex-end;
+    text-align:right;
+  }
+  .marca{
+    font:900 92px/1 "Arial Black","Segoe UI Black",Impact,sans-serif;
+    letter-spacing:-2px;margin:0;
+  }
+  .marca .a{color:#EAEAEA}
+  .marca .b{color:#29B6F6}
+  .regla{width:640px;height:1px;background:#2A2A2A;margin:20px 0 18px}
+  .lema{font:400 21px/1.65 Consolas,"Cascadia Mono","DejaVu Sans Mono",monospace;margin:0}
+  .lema .uno{color:#8A8A8A}
+  .lema .dos{color:#EAEAEA}
+  .pie{
+    font:400 13px/1 Consolas,"Cascadia Mono",monospace;color:#4E4E4E;
+    letter-spacing:3px;margin-top:22px;
+  }
+</style>
+<div class="banner">
+  <img class="art" src="banner-art.png">
+  <div class="texto">
+    <p class="marca"><span class="a">PACKET</span><span class="b">SMITH</span></p>
+    <div class="regla"></div>
+    <p class="lema">
+      <span class="uno">describe a network in plain language —</span><br>
+      <span class="dos">watch it build itself in Cisco Packet Tracer</span>
+    </p>
+    <p class="pie">TERMINAL · BUN · MCP · 3 PROTOCOLS</p>
+  </div>
+</div>
