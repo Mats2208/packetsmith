@@ -84,13 +84,19 @@ jobs:
           # que muere a mitad —quedó a mano durante una caída de Actions— deja el
           # release imposible de reintentar: el reintento falla en el primer
           # paquete que sí había salido. Publicar es idempotente o no sirve.
+          # La carpeta va SIEMPRE con `./` adelante. `dist/packetsmith-darwin-arm64`
+          # tiene una barra, así que npm lo lee como el atajo de GitHub
+          # `owner/repo` y se va a buscar ssh://git@github.com/dist/… — pasó, y
+          # el error habla de claves SSH, que no tiene nada que ver.
           publicar() {
-            nombre=$(node -p "require('./$1/package.json').name")
-            version=$(node -p "require('./$1/package.json').version")
+            carpeta="./${1#./}"
+            nombre=$(node -p "require('$carpeta/package.json').name")
+            version=$(node -p "require('$carpeta/package.json').version")
             if npm view "$nombre@$version" version >/dev/null 2>&1; then
               echo "ya estaba: $nombre@$version"
             else
-              npm publish "$1" --access public
+              echo "publicando: $nombre@$version"
+              npm publish "$carpeta" --access public
             fi
           }
           # Los de plataforma PRIMERO: el paquete que los referencia como
