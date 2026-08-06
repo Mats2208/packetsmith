@@ -117,6 +117,23 @@ everywhere; the full set runs in CI on `ubuntu-latest`.
 The release workflow typechecks and tests before building. A broken release is worse than a
 late one.
 
+## Publishing
+
+Tagging `v*` builds the seven binaries and attaches them to the release. Publishing to npm
+additionally needs a token, loaded once:
+
+```bash
+bash scripts/npm-token.sh
+```
+
+It asks for the token without echoing it and pipes it to `gh secret set` — a token passed
+as an argument is visible in the process list, and `gh secret set` takes the **name** as the
+argument and the **value** on stdin, so getting them the wrong way round leaves the token as
+the secret's *name*. Secret names are not secret.
+
+The npm job is gated on `PUBLISH_NPM == 'true'` so a missing token cannot leave a release
+half-published, with binaries attached and npm untouched.
+
 ## Both platforms, every time
 
 The project is developed on macOS **and** Windows. A change that only ever runs on one is
