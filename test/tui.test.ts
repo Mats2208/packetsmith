@@ -506,6 +506,16 @@ describe("pantalla de bienvenida", () => {
     expect(on).not.toContain("MCP BUILDER")
   })
 
+  test("la portada no se derrama fuera de su zona", async () => {
+    // La otra mitad del mismo bug: con cada renglón declarando su alto, la
+    // portada ya no se apila sobre sí misma, pero en una terminal baja el
+    // sobrante se dibujaba ENCIMA de la barra de estado. El contenedor recorta.
+    const alto = 14
+    const frame = await frameOf(
+      () => Chat({ turns: [], streaming: "", busy: false, live: false }), 76, alto)
+    expect(frame.split("\n").filter((l) => l.length).length).toBeLessThanOrEqual(alto)
+  })
+
   test("en una terminal baja los renglones no se pisan", async () => {
     // Bug real y de los peores, porque afectaba a la PRIMERA pantalla: sin un
     // alto declarado por renglón, el flex apretaba la caja cuando faltaba

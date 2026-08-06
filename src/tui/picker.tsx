@@ -176,8 +176,21 @@ export function filtrar(opciones: Opcion[], consulta: string): Opcion[] {
 // Como efecto secundario ocupa la mitad de alto, que en una app partida en dos
 // paneles es alto que le devolvés a la conversación.
 
-/** Espacio entre una opción y la siguiente. */
-const HUECO = 2
+/**
+ * Espacio ENTRE opciones, fuera del resaltado.
+ *
+ * Va separado del relleno interno a propósito. Cuando todo era una sola cadena
+ * —`●título` más dos espacios, todo con el fondo del resaltado— pasaban dos
+ * cosas feas: el recuadro del elegido quedaba con un espacio a la izquierda y
+ * dos a la derecha, y el punto del que está en uso se comía el relleno
+ * izquierdo, así que `●ice` salía pegado al recuadro anterior.
+ *
+ * Ahora el hueco es de la fila, no de la opción, y el punto vive en el hueco.
+ */
+const HUECO = 1
+
+/** Relleno adentro del resaltado, a cada lado del nombre. */
+const RELLENO = 1
 
 /**
  * Cuánto mide la columna de familias.
@@ -202,7 +215,7 @@ export function anchoFamilia(opciones: Opcion[]): number {
  * pesa. Se pierde la columna a plomo entre renglones distintos, y no importa —
  * lo que agrupa acá es la familia, no la columna.
  */
-export const anchoOpcion = (o: Opcion) => o.title.length + 1 + HUECO
+export const anchoOpcion = (o: Opcion) => HUECO + RELLENO + o.title.length + RELLENO
 
 /** Cuántas opciones entran en un renglón, a partir de la primera. */
 export function cuantasEntran(opciones: Opcion[], desde: number, disponible: number): number {
@@ -401,17 +414,27 @@ export function Picker(props: {
                     const o = () => visibles()[i()]!
                     const puesto = () => i() === cursor()
                     return (
-                      <text
-                        style={{
-                          // El elegido se marca con FONDO. Un tercer color de
-                          // texto sobre un tablero de dos tonos no se distingue.
-                          bg: puesto() ? C.brand : undefined,
-                          fg: puesto() ? C.panel : o().current ? C.brand : C.fg,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {`${o().current ? "●" : " "}${o().title}${" ".repeat(HUECO)}`}
-                      </text>
+                      <>
+                        {/* El hueco es de la FILA, no de la opción, y el punto
+                            del que está en uso vive acá adentro. Así el recuadro
+                            del elegido queda con el mismo relleno de los dos
+                            lados, y un `●` no se come el de la izquierda. */}
+                        <text style={{ fg: C.brand, flexShrink: 0 }}>
+                          {o().current ? "●" : " "}
+                        </text>
+                        <text
+                          style={{
+                            // El elegido se marca con FONDO. Un tercer color de
+                            // texto sobre un tablero de dos tonos no se
+                            // distinguiría de los otros dos.
+                            bg: puesto() ? C.brand : undefined,
+                            fg: puesto() ? C.panel : o().current ? C.brand : C.fg,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {`${" ".repeat(RELLENO)}${o().title}${" ".repeat(RELLENO)}`}
+                        </text>
+                      </>
                     )
                   }}
                 </Index>

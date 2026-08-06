@@ -457,7 +457,15 @@ export function Chat(props: {
   const vacio = () => !props.turns.length && !props.streaming && !props.liveTools?.length
 
   return (
-    <box style={{ flexDirection: "column", flexGrow: 1, paddingLeft: 1, paddingRight: 1 }}>
+    // `overflow: hidden` no es cosmético: la portada declara el alto de cada
+    // renglón para que el flex no se los apile encima, así que cuando la
+    // terminal es baja el contenido sobra. Sin recortar acá, ese sobrante se
+    // dibuja ENCIMA de la barra de estado — que es el mismo bug de antes, una
+    // caja más afuera.
+    <box style={{
+      flexDirection: "column", flexGrow: 1, paddingLeft: 1, paddingRight: 1,
+      overflow: "hidden",
+    }}>
       <Show when={vacio()}>
         <Welcome live={props.live} mcp={props.mcp} />
       </Show>

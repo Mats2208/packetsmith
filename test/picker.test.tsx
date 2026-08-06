@@ -124,6 +124,15 @@ describe("el tablero", () => {
     }
   })
 
+  test("el hueco entre opciones NO es parte del resaltado", () => {
+    // El recuadro del elegido tiene que quedar con el mismo relleno de los dos
+    // lados. Cuando todo era una sola cadena, el punto del que está en uso se
+    // comía el relleno izquierdo y `●ice` salía pegado al recuadro anterior.
+    const ancho = anchoOpcion({ value: "a", title: "ice" })
+    // hueco + relleno + nombre + relleno
+    expect(ancho).toBe(1 + 1 + "ice".length + 1)
+  })
+
   test("las opciones se empaquetan según lo que miden", () => {
     // Alineadas a la más larga, `/mcp` arrastraba ocho espacios detrás solo
     // porque en otro renglón existe `/topology`, y el tablero quedaba

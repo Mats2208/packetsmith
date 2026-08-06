@@ -515,7 +515,7 @@ export function App(props: {
           manual industrial, no adorno — dice qué versión estás mirando.
           El estado del enlace NO va acá: vive en el panel de topología, que es
           de lo que habla. Dos indicadores del mismo dato compiten. */}
-      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+      <box style={{ paddingLeft: 1, paddingRight: 1, height: 1, flexShrink: 0 }}>
         <Hud
           segments={[
             // El nombre es lo único de marca en la cabecera. El resto son
@@ -555,7 +555,7 @@ export function App(props: {
       {/* Barra de estado ARRIBA del campo de escritura: lo que informa va junto
           a la conversación, y el campo queda último, que es donde está el
           cursor y donde el ojo vuelve solo después de leer. */}
-      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+      <box style={{ paddingLeft: 1, paddingRight: 1, height: 1, flexShrink: 0 }}>
         <Hud
           lead={
             <Activity
