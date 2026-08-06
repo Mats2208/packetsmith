@@ -11,7 +11,6 @@
 import { createSignal } from "solid-js"
 import type { TextareaRenderable } from "@opentui/core"
 import { C } from "./theme.ts"
-import { EDGE } from "./frame.tsx"
 
 /** Hasta acá crece. Más que esto le come el alto a la conversación. */
 export const MAX_ROWS = 3
@@ -108,26 +107,22 @@ export function Prompt(props: {
   }
 
   return (
-    // El campo tiene cuerpo: fondo propio, aire arriba y abajo, y una cuña de
-    // color a la izquierda. Antes era una línea suelta pegada al borde inferior
-    // y no se leía como "acá se escribe" sino como una fila más de estado.
+    // Un cursor y el texto. Nada más.
     //
-    // La cuña se apaga mientras el agente trabaja: en ese rato no hay nada que
-    // mandar, y que el color desaparezca lo dice sin una palabra.
-    <box
-      style={{
-        flexDirection: "row",
-        height: rows() + 2,
-        paddingTop: 1,
-        paddingBottom: 1,
-        paddingRight: 2,
-        backgroundColor: C.sunken,
-        border: ["left"],
-        customBorderChars: EDGE,
-        borderColor: props.busy ? C.line : C.brand,
-      }}
-    >
-      <box style={{ flexGrow: 1, height: rows(), marginLeft: 1 }}>
+    // Antes esto era una caja con fondo propio y una cuña maciza de color a la
+    // izquierda, que es la forma que tiene medio agente de terminal. Una barra
+    // de una columna encendida a lo alto del campo pesa mucho para lo único que
+    // dice —si se puede escribir o no—, y eso lo dice igual un carácter.
+    //
+    // Así que el estado vive en el prompt: encendido cuando es tu turno,
+    // apagado mientras el agente trabaja. Misma información, una fracción de la
+    // tinta, y el fondo sin cortar deja que el filete de arriba haga la
+    // separación él solo.
+    <box style={{ flexDirection: "row", height: rows() + 2, paddingTop: 1, paddingBottom: 1 }}>
+      <box style={{ width: 3, height: rows(), flexShrink: 0 }}>
+        <text style={{ fg: props.busy ? C.faint : C.brand }}>{" › "}</text>
+      </box>
+      <box style={{ flexGrow: 1, height: rows(), paddingRight: 2 }}>
         <textarea
           ref={(r: TextareaRenderable) => {
             area = r
@@ -139,8 +134,6 @@ export function Prompt(props: {
           placeholder={props.placeholder}
           placeholderColor={C.faint}
           textColor={C.fg}
-          backgroundColor={C.sunken}
-          focusedBackgroundColor={C.sunken}
           focusedTextColor={C.fg}
           cursorColor={C.brand}
           onContentChange={measure}
