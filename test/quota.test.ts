@@ -5,7 +5,7 @@ import { expect, test, describe } from "bun:test"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseQuota, parseToken, QuotaCache, readToken, type Fetched } from "../src/engine/quota.ts"
+import { parseQuota, parseToken, pollQuota, QuotaCache, readToken, type Fetched } from "../src/engine/quota.ts"
 import { pctColor } from "../src/tui/app.tsx"
 import { C } from "../src/tui/theme.ts"
 
@@ -102,6 +102,59 @@ describe("QuotaCache", () => {
     expect(c.get(61_001, contar)).toEqual({ session: 70 })
     expect(intentos).toBe(1)
   })
+})
+
+describe("pollQuota", () => {
+  const home = (contents: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "packetsmith-poll-"))
+    mkdirSync(join(dir, ".claude"))
+    writeFileSync(join(dir, ".claude", ".credentials.json"), contents)
+    return dir
+  }
+
+  test("cortar durante un pedido en vuelo no deja un timer armado", async () => {
+    // El bug: `stop()` limpiaba el timer que hubiera en ese momento, pero el
+    // tick que ya estaba corriendo armaba OTRO al volver del fetch, y a ese no
+    // lo cancelaba nadie. Un timer pendiente mantiene vivo el event loop, así
+    // que la app tardaba hasta cinco minutos en terminar de cerrarse.
+    //
+    // Se mide contando timers vivos, no esperando: esperar cinco minutos en un
+    // test no es una opción.
+    const vivos = new Set<ReturnType<typeof setTimeout>>()
+    const realSet = globalThis.setTimeout
+    const realClear = globalThis.clearTimeout
+    globalThis.setTimeout = ((fn: any, ms?: number) => {
+      const id = realSet(fn, ms)
+      vivos.add(id)
+      return id
+    }) as typeof setTimeout
+    globalThis.clearTimeout = ((id: any) => {
+      vivos.delete(id)
+      return realClear(id)
+    }) as typeof clearTimeout
+
+    try {
+      // El pedido tarda a propósito: hay que cortar CON UNO EN VUELO, que es el
+      // único caso en el que el bug aparecía.
+      const enVuelo = (): Promise<Fetched> =>
+        new Promise((res) => realSet(() => res({ ok: true, quota: { session: 10 } }), 200))
+
+      const stop = pollQuota(
+        home('{"claudeAiOauth":{"accessToken":"sk-ant-test"}}'),
+        () => {},
+        { pedir: enVuelo },
+      )
+      await new Promise((r) => realSet(r, 60))
+      stop()
+      // Tiempo de sobra para que el pedido termine y el tick quiera reprogramar.
+      await new Promise((r) => realSet(r, 500))
+      expect(vivos.size).toBe(0)
+    } finally {
+      globalThis.setTimeout = realSet
+      globalThis.clearTimeout = realClear
+      for (const id of vivos) realClear(id)
+    }
+  }, 15_000)
 })
 
 describe("pctColor", () => {

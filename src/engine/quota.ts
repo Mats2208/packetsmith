@@ -158,9 +158,12 @@ const POLL_MS = 5 * 60_000
 export function pollQuota(
   home: string,
   onQuota: (q: Quota) => void,
-  opts: { pollMs?: number } = {},
+  /** `pedir` entra por parámetro por lo mismo que `fetch` en `QuotaCache`: que
+   *  el ciclo se pueda testear sin red. */
+  opts: { pollMs?: number; pedir?: (token: string) => Promise<Fetched> } = {},
 ): () => void {
   const cache = new QuotaCache()
+  const pedir = opts.pedir ?? fetchQuota
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -169,10 +172,16 @@ export function pollQuota(
     const token = await readToken(home)
     if (!token || stopped) return
 
-    const result = await fetchQuota(token)
+    const result = await pedir(token)
     const quota = cache.get(Date.now(), () => result)
-    if (quota && !stopped) onQuota(quota)
+    if (stopped) return
+    if (quota) onQuota(quota)
 
+    // El `stopped` de arriba no es de más: si se corta MIENTRAS el pedido está
+    // en vuelo, el `clearTimeout` de `stop()` no encuentra nada que limpiar
+    // —todavía no hay timer— y este `setTimeout` armaba uno que ya nadie iba a
+    // cancelar. Un timer pendiente mantiene vivo el event loop, así que la app
+    // tardaba hasta cinco minutos en terminar de cerrarse después de salir.
     timer = setTimeout(tick, opts.pollMs ?? POLL_MS)
   }
 

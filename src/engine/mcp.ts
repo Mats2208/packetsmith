@@ -70,6 +70,11 @@ export function scopeToPacketTracer(
   if (!server) return { args: [] }
 
   const path = join(tmpdir(), `packetsmith-mcp-${pid}.json`)
-  writeFileSync(path, JSON.stringify({ mcpServers: { [SERVER]: server } }))
+  // 0600 explícito. Lo que se copia acá sale de `~/.claude.json`, que es del
+  // usuario y nada más, y una definición de servidor MCP puede traer un bloque
+  // `env` con credenciales. Sin el modo, `writeFileSync` deja 0644 y el archivo
+  // queda legible por cualquiera en un /tmp compartido: sería bajarle los
+  // permisos a un secreto por el camino.
+  writeFileSync(path, JSON.stringify({ mcpServers: { [SERVER]: server } }), { mode: 0o600 })
   return { args: ["--mcp-config", path, "--strict-mcp-config"], path }
 }
