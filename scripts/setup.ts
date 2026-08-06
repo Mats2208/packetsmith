@@ -41,9 +41,25 @@ async function run(cmd: string[], label: string): Promise<boolean> {
   return code === 0
 }
 
-async function has(bin: string): Promise<boolean> {
-  return (await Bun.spawn(["which", bin], { stdout: "ignore", stderr: "ignore" }).exited) === 0
+/**
+ * Si un ejecutable está en el PATH.
+ *
+ * `Bun.which` y no `which`: ese binario no existe en Windows —el equivalente es
+ * `where`— así que el script se moría en la primera comprobación con
+ * "Executable not found in $PATH: which", antes de imprimir una sola línea
+ * útil. Windows es justo donde más corre Packet Tracer.
+ */
+function has(bin: string): boolean {
+  return Bun.which(bin) !== null
 }
+
+const WIN = process.platform === "win32"
+
+/** El intérprete de Python que exista en esta máquina. */
+const PYTHON = ["python3", "python"].find(has)
+
+/** Dentro de un venv, los ejecutables viven en `Scripts` en Windows y en `bin` en el resto. */
+const venvBin = (name: string) => join(VENV, WIN ? "Scripts" : "bin", name)
 
 /**
  * Pregunta antes de tocar nada.
@@ -64,15 +80,17 @@ console.log(`\n${c.b("PACKETSMITH")} ${c.d("· setup")}${DRY ? c.d("  (dry-run)"
 
 // ── 1. Lo que tiene que estar de antes ──────────────────────────────────────
 let falta = false
-for (const [bin, why] of [
-  ["bun", "corre la app — OpenTUI no anda en Node"],
-  ["claude", "es el agente que PacketSmith envuelve"],
-  ["python3", "corre el servidor MCP"],
-  ["git", "baja el servidor MCP"],
+for (const [bin, why, presente] of [
+  ["bun", "corre la app — OpenTUI no anda en Node", has("bun")],
+  ["claude", "es el agente que PacketSmith envuelve", has("claude")],
+  // Se informa cuál se encontró: en Windows suele ser `python` y en Linux
+  // `python3`, y decir "python3 ○" cuando hay un Python perfecto instalado
+  // manda a instalar algo que ya está.
+  [PYTHON ?? "python3", "corre el servidor MCP", Boolean(PYTHON)],
+  ["git", "baja el servidor MCP", has("git")],
 ] as const) {
-  const ok = await has(bin)
-  console.log(`  ${ok ? c.ok("●") : c.no("○")} ${c.t(bin.padEnd(9))}${c.d(why)}`)
-  if (!ok) falta = true
+  console.log(`  ${presente ? c.ok("●") : c.no("○")} ${c.t(bin.padEnd(9))}${c.d(why)}`)
+  if (!presente) falta = true
 }
 if (falta) {
   console.log(`\n${c.no("Falta alguna herramienta de arriba.")} Instalala y volvé a correr esto.\n`)
@@ -102,10 +120,10 @@ if (isConfigured(HOME, process.cwd())) {
   if (!existsSync(src) && !(await run(["git", "clone", "--depth", "1", REPO, src], "clone"))) {
     process.exit(1)
   }
-  if (!existsSync(VENV) && !(await run(["python3", "-m", "venv", VENV], "venv"))) process.exit(1)
+  if (!existsSync(VENV) && !(await run([PYTHON!, "-m", "venv", VENV], "venv"))) process.exit(1)
 
-  const pip = join(VENV, "bin", "pip")
-  const py = join(VENV, "bin", "python")
+  const pip = venvBin("pip")
+  const py = venvBin("python")
   // `mcp<2` porque `mcp.server.fastmcp` desapareció en la 2.0 y el servidor no
   // arranca. Va explícito y no confiado al pyproject: si alguna vez se afloja
   // ahí, esto sigue instalando una versión que funciona.
