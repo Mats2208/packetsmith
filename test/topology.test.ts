@@ -3,7 +3,7 @@
 import { expect, test, describe } from "bun:test"
 import { ingest, parseExportTopology, parseQueryTopology, unwrapToolOutput, EMPTY } from "../src/topology/ingest.ts"
 import { kindOf, type Kind } from "../src/topology/model.ts"
-import { buildForest, censusOf, groupBySubnet } from "../src/topology/tree.ts"
+import { buildForest, censusOf, groupBySubnet, SIN_IP } from "../src/topology/tree.ts"
 
 const EXPORT = `=== Topology Export: 4 devices, 3 links ===
 
@@ -290,7 +290,7 @@ describe("groupBySubnet", () => {
   test("los equipos sin IP van al final", () => {
     const t = ingest(EMPTY, "mcp__packet-tracer__pt_query_topology", JSON.stringify({ result: QUERY }))
     const groups = groupBySubnet(t)
-    expect(groups[groups.length - 1]!.label).toBe("sin IP")
+    expect(groups[groups.length - 1]!.label).toBe(SIN_IP)
     expect(groups[groups.length - 1]!.devices[0]!.name).toBe("SW1")
   })
 })

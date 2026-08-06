@@ -113,6 +113,10 @@ function subnetOf(ip: string): string {
   return ip.split("/")[0]!.split(".").slice(0, 3).join(".")
 }
 
+/** Etiqueta del grupo de los que no tienen dirección. No se traduce acá: es
+ *  una CLAVE de agrupado, y la UI la muestra tal cual. */
+export const SIN_IP = "—"
+
 export interface Group {
   /** `192.168.0.0/24`, o "sin IP" para los equipos que no tienen ninguna. */
   label: string
@@ -134,7 +138,7 @@ export function groupBySubnet(topo: Topology): Group[] {
     // Un equipo con varias IPs (un router) va con la ÚLTIMA: las interfaces
     // vienen en el orden en que PT las lista, los enlaces de tránsito primero
     // y la LAN al final, y la LAN es la que dice de qué segmento es dueño.
-    const key = ips.length ? `${subnetOf(ips[ips.length - 1]!)}.0/24` : "sin IP"
+    const key = ips.length ? `${subnetOf(ips[ips.length - 1]!)}.0/24` : SIN_IP
     const list = groups.get(key)
     if (list) list.push(d)
     else groups.set(key, [d])
@@ -143,5 +147,5 @@ export function groupBySubnet(topo: Topology): Group[] {
   return [...groups.entries()]
     .map(([label, devices]) => ({ label, devices }))
     // "sin IP" siempre al final: es lo menos informativo.
-    .sort((a, b) => (a.label === "sin IP" ? 1 : b.label === "sin IP" ? -1 : a.label.localeCompare(b.label)))
+    .sort((a, b) => (a.label === SIN_IP ? 1 : b.label === SIN_IP ? -1 : a.label.localeCompare(b.label)))
 }

@@ -12,12 +12,18 @@ import type { BorderCharacters } from "@opentui/core"
 import { C } from "./theme.ts"
 import type { Run, Tone } from "./ascii.ts"
 
-/** Cada tono del arte, resuelto a color. El arte no sabe de colores. */
-export const TONE: Record<Tone, string> = {
+/**
+ * Cada tono del arte, resuelto a color. El arte no sabe de colores.
+ *
+ * Función y no constante: una constante de módulo se queda con los colores del
+ * tema que hubiera al importar el archivo, y el wordmark seguía pintado con la
+ * paleta vieja después de cambiar de tema.
+ */
+export const tone = (): Record<Tone, string> => ({
   art: C.brand,
   muted: C.fg,
-  shadow: C.rule,
-}
+  shadow: C.shadow,
+})
 
 /**
  * Bordes que dibujan UN solo trazo.
@@ -36,8 +42,6 @@ const NO_CHARS: BorderCharacters = {
 export const SPLIT = { ...NO_CHARS, vertical: "┃" }
 /** Canaleta fina: marca de quién es un mensaje, a lo largo de todo el bloque. */
 export const GUTTER = { ...NO_CHARS, vertical: "▌" }
-/** Cuña maciza: el borde de color del campo de escritura. */
-export const EDGE = { ...NO_CHARS, vertical: "█" }
 /** Regla horizontal a lo ancho del contenedor, sin tener que saber el ancho. */
 export const HAIRLINE = { ...NO_CHARS, horizontal: "─" }
 
@@ -70,7 +74,7 @@ export function Art(props: { rows: Run[][]; marginTop?: number }) {
         {(row) => (
           <box style={{ flexDirection: "row", height: 1 }}>
             <For each={row}>
-              {(run) => <text style={{ fg: TONE[run.tone] }}>{run.text}</text>}
+              {(run) => <text style={{ fg: tone()[run.tone] }}>{run.text}</text>}
             </For>
           </box>
         )}
@@ -93,7 +97,7 @@ export function Plate(props: { lines: readonly string[]; fg?: string; marginTop?
       <For each={props.lines}>
         {(line) => (
           <box style={{ height: 1 }}>
-            <text style={{ fg: props.fg ?? C.rule }}>{line}</text>
+            <text style={{ fg: props.fg ?? C.faint }}>{line}</text>
           </box>
         )}
       </For>
@@ -129,7 +133,7 @@ export function Hud(props: {
         {(s, i) => (
           <>
             <Show when={i() > 0 || props.lead}>
-              <text style={{ fg: C.rule, flexShrink: 0 }}>{"  ·  "}</text>
+              <text style={{ fg: C.line, flexShrink: 0 }}>{"  ·  "}</text>
             </Show>
             <text style={{ fg: s.fg ?? C.dim, flexShrink: 0 }}>{s.text}</text>
           </>
@@ -160,7 +164,7 @@ export function Gauge(props: { fraction: number; width?: number; fg?: string }) 
   return (
     <>
       <span style={{ fg: props.fg ?? C.wire }}>{"█".repeat(filled())}</span>
-      <span style={{ fg: C.rule }}>{"░".repeat(width() - filled())}</span>
+      <span style={{ fg: C.line }}>{"░".repeat(width() - filled())}</span>
     </>
   )
 }
@@ -172,7 +176,7 @@ export function Hairline() {
       style={{
         height: 1,
         border: ["bottom"],
-        borderColor: C.rule,
+        borderColor: C.line,
         customBorderChars: HAIRLINE,
       }}
     />

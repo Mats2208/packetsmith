@@ -9,6 +9,7 @@
 import { Show } from "solid-js"
 import type { Phase } from "../engine/types.ts"
 import { C } from "./theme.ts"
+import { T } from "./i18n.ts"
 import { sweep } from "./ascii.ts"
 
 /**
@@ -18,15 +19,6 @@ import { sweep } from "./ascii.ts"
  * bloques y filetes, y los puntos meten una tipografía que no es de la casa.
  */
 const TURN = ["◐", "◓", "◑", "◒"] as const
-
-/** Etiqueta y color por fase. En reposo se apaga: nada que mirar, nada que gritar. */
-const LABEL: Record<Phase, string> = {
-  idle: "LISTO",
-  requesting: "CONSULTANDO",
-  thinking: "RAZONANDO",
-  writing: "ESCRIBIENDO",
-  tool: "EJECUTANDO",
-}
 
 /** `1234` → `1.2k`. Los tokens de razonamiento llegan a decenas de miles. */
 export function compact(n: number): string {
@@ -58,8 +50,8 @@ export function Activity(props: {
 
   return (
     <box style={{ flexDirection: "row", height: 1 }}>
-      <text style={{ fg: busy() ? C.fg : C.rule, flexShrink: 0 }}>
-        {`${glyph()} ${props.phase === "tool" && props.detail ? props.detail : LABEL[props.phase]}`}
+      <text style={{ fg: busy() ? C.fg : C.faint, flexShrink: 0 }}>
+        {`${glyph()} ${props.phase === "tool" && props.detail ? props.detail : T.fases[props.phase]}`}
       </text>
       {/* Los tokens de razonamiento son la prueba de que algo pasa cuando no
           hay texto todavía. Sin ellos "RAZONANDO" también podría estar mintiendo. */}
@@ -70,7 +62,7 @@ export function Activity(props: {
           está en vuelo y no volvió ni un token. El barrido ocupa ese hueco con
           movimiento, que es la única información que hay para dar. */}
       <Show when={props.phase === "requesting"}>
-        <text style={{ fg: C.rule, flexShrink: 0 }}>{`  ${sweep(12, props.beat)}`}</text>
+        <text style={{ fg: C.faint, flexShrink: 0 }}>{`  ${sweep(12, props.beat)}`}</text>
       </Show>
       <Show when={busy() && props.elapsedMs}>
         <text style={{ fg: C.dim, flexShrink: 0 }}>{`  ${clock(props.elapsedMs!)}`}</text>

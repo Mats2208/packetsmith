@@ -23,7 +23,7 @@ import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import type { AgentEvent, Engine, Session, StartOpts } from "./types.ts"
 import { jsonLines } from "./stream.ts"
-import { SYSTEM_PROMPT } from "./prompt.ts"
+import { systemPrompt } from "./prompt.ts"
 import { scopeToPacketTracer } from "./mcp.ts"
 
 export function buildArgs(opts: StartOpts & { mcpArgs?: string[] }): string[] {
@@ -42,6 +42,10 @@ export function buildArgs(opts: StartOpts & { mcpArgs?: string[] }): string[] {
   // del usuario, y sus definiciones de tools viajan en cada pedido.
   if (opts.mcpArgs?.length) args.push(...opts.mcpArgs)
   if (opts.model) args.push("--model", opts.model)
+  if (opts.effort) args.push("--effort", opts.effort)
+  // Reanudar una conversación anterior. Es lo que hace que cambiar de modelo no
+  // cueste el contexto: se relanza el proceso sobre la misma sesión.
+  if (opts.resume) args.push("--resume", opts.resume)
   if (opts.allowedTools) {
     // Lista vacía = "sin ninguna tool", pero el flag igual necesita un valor:
     // `--allowedTools` a secas hace que el CLI aborte con "argument missing".
@@ -60,7 +64,7 @@ export function buildArgs(opts: StartOpts & { mcpArgs?: string[] }): string[] {
   // desaparecían en silencio y el agente arrancaba con los 11 servidores MCP
   // del usuario y el modelo por defecto. Medido. Poniéndolo al final, lo peor
   // que puede pasar es que se recorte el prompt.
-  args.push("--append-system-prompt", SYSTEM_PROMPT)
+  args.push("--append-system-prompt", systemPrompt(opts.lang ?? "en"))
   return args
 }
 
@@ -251,6 +255,21 @@ function userMessage(text: string): string {
 
 export const claude: Engine = {
   name: "claude",
+
+  // Alias y no nombres completos: un alias apunta siempre a la última versión
+  // de su familia, así que la lista no envejece con cada modelo nuevo.
+  models: () => ["opus", "sonnet", "haiku", "fable"].map((value) => ({ value })),
+
+  describe() {
+    const mcp = scopeToPacketTracer(homedir(), process.cwd())
+    // El temporal se borra enseguida: acá solo interesa SI se encontró la
+    // config del MCP, no dejar un archivo suelto por haber preguntado.
+    if (mcp.path) try { unlinkSync(mcp.path) } catch { /* ya no estaba */ }
+    return {
+      binario: resolveBin(),
+      "MCP acotado": mcp.args.length ? "sí" : "no — hereda toda la config",
+    }
+  },
 
   start(opts: StartOpts): Session {
     const cwd = opts.cwd ?? process.cwd()

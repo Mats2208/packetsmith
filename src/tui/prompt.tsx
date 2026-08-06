@@ -11,7 +11,6 @@
 import { createSignal } from "solid-js"
 import type { TextareaRenderable } from "@opentui/core"
 import { C } from "./theme.ts"
-import { EDGE } from "./frame.tsx"
 
 /** Hasta acá crece. Más que esto le come el alto a la conversación. */
 export const MAX_ROWS = 3
@@ -79,6 +78,17 @@ export function Prompt(props: {
   busy: boolean
   placeholder: string
   onSubmit: (text: string) => void
+  /**
+   * Entrega una forma de leer el borrador EN EL MOMENTO.
+   *
+   * La necesita la paleta de comandos: `/` solo abre la lista si el campo está
+   * vacío, porque en el medio de una frase una barra es una barra. Y tiene que
+   * ser una lectura sincrónica, no una señal que se actualice después: medido,
+   * `onContentChange` se dispara una vez terminado el lote de entrada y siempre
+   * con el texto final, así que una señal alimentada desde ahí llega tarde
+   * justo cuando hay que decidir.
+   */
+  onReady?: (leerBorrador: () => string) => void
 }) {
   const [rows, setRows] = createSignal(1)
   let area: TextareaRenderable | undefined
@@ -97,36 +107,33 @@ export function Prompt(props: {
   }
 
   return (
-    // El campo tiene cuerpo: fondo propio, aire arriba y abajo, y una cuña de
-    // color a la izquierda. Antes era una línea suelta pegada al borde inferior
-    // y no se leía como "acá se escribe" sino como una fila más de estado.
+    // Un cursor y el texto. Nada más.
     //
-    // La cuña se apaga mientras el agente trabaja: en ese rato no hay nada que
-    // mandar, y que el color desaparezca lo dice sin una palabra.
-    <box
-      style={{
-        flexDirection: "row",
-        height: rows() + 2,
-        paddingTop: 1,
-        paddingBottom: 1,
-        paddingRight: 2,
-        backgroundColor: C.sunken,
-        border: ["left"],
-        customBorderChars: EDGE,
-        borderColor: props.busy ? C.rule : C.brand,
-      }}
-    >
-      <box style={{ flexGrow: 1, height: rows(), marginLeft: 1 }}>
+    // Antes esto era una caja con fondo propio y una cuña maciza de color a la
+    // izquierda, que es la forma que tiene medio agente de terminal. Una barra
+    // de una columna encendida a lo alto del campo pesa mucho para lo único que
+    // dice —si se puede escribir o no—, y eso lo dice igual un carácter.
+    //
+    // Así que el estado vive en el prompt: encendido cuando es tu turno,
+    // apagado mientras el agente trabaja. Misma información, una fracción de la
+    // tinta, y el fondo sin cortar deja que el filete de arriba haga la
+    // separación él solo.
+    <box style={{ flexDirection: "row", height: rows() + 2, paddingTop: 1, paddingBottom: 1 }}>
+      <box style={{ width: 3, height: rows(), flexShrink: 0 }}>
+        <text style={{ fg: props.busy ? C.faint : C.brand }}>{" › "}</text>
+      </box>
+      <box style={{ flexGrow: 1, height: rows(), paddingRight: 2 }}>
         <textarea
-          ref={(r: TextareaRenderable) => (area = r)}
+          ref={(r: TextareaRenderable) => {
+            area = r
+            props.onReady?.(() => area?.plainText ?? "")
+          }}
           focused
           wrapMode="word"
           keyBindings={KEYS}
           placeholder={props.placeholder}
-          placeholderColor={C.rule}
+          placeholderColor={C.faint}
           textColor={C.fg}
-          backgroundColor={C.sunken}
-          focusedBackgroundColor={C.sunken}
           focusedTextColor={C.fg}
           cursorColor={C.brand}
           onContentChange={measure}

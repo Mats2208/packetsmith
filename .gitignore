@@ -3,6 +3,18 @@ bun.lockb
 dist/
 build/
 
+# Credenciales. Las keys viven en ~/.packetsmith/auth.json con modo 0600 y NO
+# en el repo; esto es la red por si alguna cae acá de paso. Un `git add -A`
+# distraído es todo lo que hace falta para publicar una key.
+AUTH.txt
+auth.json
+.env
+.env.*
+
+# Pruebas sueltas de desarrollo, que suelen llevar credenciales adentro.
+*.local.ts
+*.local.tsx
+
 # Instrucciones privadas de trabajo (las públicas van en AGENTS.md)
 CLAUDE.local.md
 .claude/

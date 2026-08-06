@@ -9,6 +9,7 @@ import { App, bridgeIsUp } from "../src/tui/app.tsx"
 import type { Topology } from "../src/topology/model.ts"
 import type { AgentEvent, Engine } from "../src/engine/types.ts"
 import { EMPTY } from "../src/topology/ingest.ts"
+import { T } from "../src/tui/i18n.ts"
 
 async function frameOf(node: () => any, width = 70, height = 14): Promise<string> {
   const setup = await testRender(node, { width, height })
@@ -49,8 +50,8 @@ describe("Chat", () => {
     ]
     const frame = await frameOf(() => Chat({ turns, streaming: "", busy: false }))
 
-    expect(frame).toContain("VOS")
-    expect(frame).toContain("AGENTE")
+    expect(frame).toContain(T.vos)
+    expect(frame).toContain(T.agente)
     expect(frame).toContain("crea 3 routers")
     expect(frame).toContain("listo")
   })
@@ -212,7 +213,7 @@ describe("Canvas", () => {
     // plana sin aviso se lee como si esa fuera la red.
     const plana = { devices: TOPO.devices, links: [] }
     const frame = await frameOf(() => Canvas({ topology: plana }), 46, 16)
-    expect(frame).toContain("sin enlaces")
+    expect(frame).toContain(T.sinEnlaces.replace("⚠ ", ""))
     expect(frame).toContain("pt_export_topology")
   })
 
@@ -275,9 +276,9 @@ describe("cuando el CLI se muere", () => {
     await setup.renderOnce()
 
     const frame = await setup.captureCharFrame()
-    expect(frame).toContain("la sesión con el agente terminó")
+    expect(frame).toContain(T.sesionMuerta.replace("⚠ ", "").slice(0, 24))
     // Y sobre todo: el campo sigue disponible, no bloqueado esperando a nadie.
-    expect(frame).not.toContain("el agente está trabajando")
+    expect(frame).not.toContain(T.trabajando)
   })
 })
 
@@ -287,8 +288,8 @@ describe("a dónde se fue el tiempo", () => {
   test("reparte el turno entre el bridge y el modelo", () => {
     const l = timingLine({ totalMs: 306_000, toolMs: 240_000 })
     expect(l).toContain("5m06s")
-    expect(l).toContain("4m00s en packet tracer (78%)")
-    expect(l).toContain("1m06s en el modelo")
+    expect(l).toContain(`4m00s ${T.enPacketTracer} (78%)`)
+    expect(l).toContain(`1m06s ${T.enElModelo}`)
   })
 
   test("un turno sin tools es todo del modelo", () => {
@@ -477,8 +478,8 @@ describe("pantalla de bienvenida", () => {
     // pueden pegar tal cual. La primera es de LECTURA a propósito: quien recién
     // llega prueba sin miedo a desarmar su laboratorio.
     const frame = await welcome()
-    expect(frame).toContain("PROBÁ CON")
-    expect(frame).toContain("leé la topología")
+    expect(frame).toContain(T.probaCon)
+    expect(frame).toContain(T.ejemplos[0])
     expect(frame).toContain("OSPF")
   })
 
@@ -488,7 +489,7 @@ describe("pantalla de bienvenida", () => {
     // "packet tracer sin conexión" mandaría a revisar el lugar equivocado.
     const frame = await frameOf(
       () => Chat({ turns: [], streaming: "", busy: false, live: false, mcp: false }), 76, 26)
-    expect(frame).toContain("falta el MCP")
+    expect(frame).toContain(T.faltaMcp)
     expect(frame).toContain("claude mcp add packet-tracer")
     expect(frame).not.toContain("MCP BUILDER")
   })
@@ -496,20 +497,43 @@ describe("pantalla de bienvenida", () => {
   test("el estado del puente es en vivo, no un cartel", async () => {
     // La pregunta que se hace todo el mundo al abrir esto es si Packet Tracer
     // está conectado. Se contesta antes de que la haga.
-    expect(await welcome(false)).toContain("sin conexión")
+    expect(await welcome(false)).toContain(T.ptSinConexion)
     expect(await welcome(false)).toContain("MCP BUILDER")
 
     const on = await welcome(true)
-    expect(on).toContain("packet tracer conectado")
+    expect(on).toContain(T.ptConectado)
     // Con el puente arriba no hay nada que arreglar: la instrucción sobra.
     expect(on).not.toContain("MCP BUILDER")
+  })
+
+  test("la portada no se derrama fuera de su zona", async () => {
+    // La otra mitad del mismo bug: con cada renglón declarando su alto, la
+    // portada ya no se apila sobre sí misma, pero en una terminal baja el
+    // sobrante se dibujaba ENCIMA de la barra de estado. El contenedor recorta.
+    const alto = 14
+    const frame = await frameOf(
+      () => Chat({ turns: [], streaming: "", busy: false, live: false }), 76, alto)
+    expect(frame.split("\n").filter((l) => l.length).length).toBeLessThanOrEqual(alto)
+  })
+
+  test("en una terminal baja los renglones no se pisan", async () => {
+    // Bug real y de los peores, porque afectaba a la PRIMERA pantalla: sin un
+    // alto declarado por renglón, el flex apretaba la caja cuando faltaba
+    // altura y los textos se dibujaban uno encima del otro. Salía
+    // "elspanelgdetla─derechatserdibuja solo", que no es una errata sino dos
+    // renglones superpuestos.
+    const frame = await frameOf(
+      () => Chat({ turns: [], streaming: "", busy: false, live: false }), 76, 22)
+    expect(frame).toContain(T.panelSolo)
+    expect(frame).toContain(`${T.cadena[0]}─▶${T.cadena[1]}─▶${T.cadena[2]}`)
+    expect(frame).toContain(T.ejemplos[0])
   })
 
   test("desaparece al primer mensaje", async () => {
     // Una portada permanente robaría las filas que el chat necesita.
     const used = await frameOf(
       () => Chat({ turns: [{ role: "user", text: "hola" }], streaming: "", busy: false }), 76, 26)
-    expect(used).not.toContain("PROBÁ CON")
+    expect(used).not.toContain(T.probaCon)
     expect(used).toContain("hola")
   })
 })

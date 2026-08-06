@@ -4,6 +4,7 @@ import { For, Show } from "solid-js"
 import type { Topology } from "../topology/model.ts"
 import { drawMap, naturalWidth, type Ink } from "../topology/map.ts"
 import { C } from "./theme.ts"
+import { T } from "./i18n.ts"
 import { GUTTER } from "./frame.tsx"
 import { Welcome } from "./welcome.tsx"
 
@@ -32,16 +33,21 @@ export interface Turn {
 /**
  * Tono de cada tipo de celda del plano.
  *
- * Los cables van en `wire` y no en `rule`: un filete puede permitirse ser casi
- * invisible porque su trabajo es separar, pero un cable es DATO. Dibujados en
- * `rule` sobre el fondo casi-negro el plano se veía como nodos flotando sin
+ * Los cables van en `wire` y no en `line`: un filete puede permitirse ser casi
+ * invisible porque su trabajo es separar, pero un cable es DATO. Dibujados como
+ * filete sobre el fondo casi-negro, el plano se veía como nodos flotando sin
  * ninguna conexión entre ellos.
+ *
+ * Es una FUNCIÓN y no una constante, y ahí está el detalle que importa: una
+ * constante de módulo se evalúa al importar el archivo y se queda con los
+ * colores del tema que estuviera activo en ese momento. Cambiar de tema después
+ * no la tocaba, así que el plano seguía dibujado con la paleta vieja.
  */
-const INK: Record<Ink, string> = {
+const ink = (): Record<Ink, string> => ({
   node: C.fg,
   link: C.wire,
   label: C.dim,
-}
+})
 
 /**
  * El plano de la red, con las coordenadas reales del canvas de Packet Tracer.
@@ -74,16 +80,16 @@ function MapBlock(props: { topology: Topology; width: number }) {
           marginTop: 1,
           flexShrink: 0,
           border: true,
-          borderColor: C.rule,
+          borderColor: C.line,
         }}
-        title=" PLANO · CANVAS DE PT "
+        title={T.planoCanvas}
         titleAlignment="center"
       >
         <For each={rows()}>
           {(spans) => (
             <box style={{ flexDirection: "row", height: 1 }}>
               <For each={spans}>
-                {(s) => <text style={{ fg: INK[s.ink] }}>{s.text}</text>}
+                {(s) => <text style={{ fg: ink()[s.ink] }}>{s.text}</text>}
               </For>
             </box>
           )}
@@ -261,7 +267,7 @@ function Table(props: { rows: string[][]; width?: number }) {
   return (
     <>
       <text style={{ fg: C.fg }}>{line(props.rows[0] ?? [])}</text>
-      <text style={{ fg: C.rule }}>
+      <text style={{ fg: C.line }}>
         {"  " + "─".repeat(widths().reduce((a, b) => a + b, 0) + 2 * (widths().length - 1))}
       </text>
       <For each={props.rows.slice(1)}>
@@ -326,7 +332,7 @@ export function timingLine(t: NonNullable<Turn["timing"]>): string {
   if (t.totalMs < 20_000) return `⏱ ${seg(t.totalMs)}`
 
   const pct = Math.round((t.toolMs / t.totalMs) * 100)
-  return `⏱ ${seg(t.totalMs)}  ·  ${seg(t.toolMs)} en packet tracer (${pct}%)  ·  ${seg(Math.max(0, t.totalMs - t.toolMs))} en el modelo`
+  return `⏱ ${seg(t.totalMs)}  ·  ${seg(t.toolMs)} ${T.enPacketTracer} (${pct}%)  ·  ${seg(Math.max(0, t.totalMs - t.toolMs))} ${T.enElModelo}`
 }
 
 /**
@@ -390,7 +396,7 @@ function Body(props: { text: string; width?: number }) {
           case "head":
             return <text style={{ fg: C.fg }}>{`── ${p.text.toUpperCase()}`}</text>
           case "rule":
-            return <text style={{ fg: C.rule }}>{"  " + "─".repeat(28)}</text>
+            return <text style={{ fg: C.line }}>{"  " + "─".repeat(28)}</text>
           case "table":
             return <Table rows={p.rows} width={props.width} />
           case "row":
@@ -423,10 +429,10 @@ function Block(props: { role: Turn["role"]; children: any }) {
         paddingLeft: 1,
         border: ["left"],
         customBorderChars: GUTTER,
-        borderColor: mine() ? C.fg : C.rule,
+        borderColor: mine() ? C.fg : C.faint,
       }}
     >
-      <text style={{ fg: mine() ? C.operator : C.dim }}>{mine() ? "VOS" : "AGENTE"}</text>
+      <text style={{ fg: mine() ? C.fg : C.dim }}>{mine() ? T.vos : T.agente}</text>
       {props.children}
     </box>
   )
@@ -451,7 +457,15 @@ export function Chat(props: {
   const vacio = () => !props.turns.length && !props.streaming && !props.liveTools?.length
 
   return (
-    <box style={{ flexDirection: "column", flexGrow: 1, paddingLeft: 1, paddingRight: 1 }}>
+    // `overflow: hidden` no es cosmético: la portada declara el alto de cada
+    // renglón para que el flex no se los apile encima, así que cuando la
+    // terminal es baja el contenido sobra. Sin recortar acá, ese sobrante se
+    // dibuja ENCIMA de la barra de estado — que es el mismo bug de antes, una
+    // caja más afuera.
+    <box style={{
+      flexDirection: "column", flexGrow: 1, paddingLeft: 1, paddingRight: 1,
+      overflow: "hidden",
+    }}>
       <Show when={vacio()}>
         <Welcome live={props.live} mcp={props.mcp} />
       </Show>
@@ -462,8 +476,13 @@ export function Chat(props: {
             medio. Con el fondo y el filete del tema se vuelve un riel. */}
         <scrollbox
           style={{ flexGrow: 1 }}
+          // Sin foco: un scrollbox es focusable por defecto, así que un click en
+          // el panel se lo robaba al campo de escritura y a partir de ahí no se
+          // podía tipear nada. La rueda del mouse va por posición, no por foco,
+          // así que scrollear sigue andando igual.
+          focusable={false}
           verticalScrollbarOptions={{
-            trackOptions: { backgroundColor: C.bg, foregroundColor: C.rule },
+            trackOptions: { backgroundColor: C.bg, foregroundColor: C.line },
           }}
         >
           <For each={props.turns}>
@@ -476,7 +495,7 @@ export function Chat(props: {
                   <Tools tools={turn.tools!} />
                 </Show>
                 <Show when={turn.timing}>
-                  <text style={{ fg: C.rule }}>{timingLine(turn.timing!)}</text>
+                  <text style={{ fg: C.dim }}>{timingLine(turn.timing!)}</text>
                   <box style={{ height: 1 }} />
                 </Show>
                 <Show when={turn.role === "agent"} fallback={<text>{turn.text}</text>}>

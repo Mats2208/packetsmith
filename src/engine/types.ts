@@ -1,12 +1,36 @@
+import type { Medida } from "./providers/usage.ts"
+
 // Contrato común a todos los motores. Un adapter traduce lo que emite SU CLI a
 // este union; de ahí para arriba nadie sabe si corre claude, codex u opencode.
 
 export interface StartOpts {
   model?: string
+  /** Cuánto razona el agente antes de contestar. */
+  effort?: Effort
+  /**
+   * Id de una sesión anterior a reanudar.
+   *
+   * Es lo que permite cambiar de modelo o de esfuerzo sin empezar de cero: se
+   * cierra el proceso y se levanta otro sobre la MISMA conversación.
+   */
+  resume?: string
+  /**
+   * En qué idioma tiene que contestar el agente.
+   *
+   * Va acá y no en la UI porque el prompt de sistema es un argumento de
+   * arranque: sin decírselo, el agente responde en el idioma de sus propias
+   * instrucciones, y una interfaz en inglés que contesta en castellano no está
+   * en ningún idioma.
+   */
+  lang?: string
   /** Lista blanca de tools. `undefined` = las que el CLI traiga por defecto. */
   allowedTools?: string[]
   cwd?: string
 }
+
+/** Niveles de esfuerzo que acepta el CLI. Verificado contra `claude --help`. */
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const
+export type Effort = (typeof EFFORTS)[number]
 
 /**
  * En qué anda el agente ahora mismo.
@@ -93,4 +117,46 @@ export interface Session {
 export interface Engine {
   readonly name: string
   start(opts: StartOpts): Session
+  /**
+   * Datos de diagnóstico para `/debug`, si el motor tiene algo que decir.
+   *
+   * Existe porque el fallo más caro de este proyecto fue invisible: en Windows
+   * el CLI se lanzaba a través de un shim que se comía media línea de comandos,
+   * y no había forma de ver con qué binario ni con qué argumentos había
+   * arrancado. Cada motor sabe qué de lo suyo vale la pena mirar.
+   */
+  describe?(): Record<string, string>
+  /**
+   * Los modelos que ofrece, para `/model`.
+   *
+   * Los declara el motor y no una lista suelta en la UI porque los alias de
+   * Claude (`opus`, `sonnet`) no tienen nada que ver con los nombres de Kimi
+   * (`kimi-k2-turbo-preview`), y ofrecer los de uno con el otro puesto es
+   * ofrecer algo que va a fallar.
+   */
+  models?(): { value: string; description?: string }[]
+  /**
+   * Si el motor NO cobra por token.
+   *
+   * Los planes de suscripción —Kimi Code, y el CLI de Claude contra un Max— no
+   * tienen precio por millón, así que el contador de la barra marcaría
+   * `$0.0000` para siempre. Un cero permanente no es "gratis": es un contador
+   * que parece roto, y esconderlo dice la verdad mejor que mostrarlo.
+   */
+  sinCostoPorToken?: boolean
+  /**
+   * Cuánto va consumido del plan, si el proveedor publica un medidor.
+   *
+   * Con el CLI de Claude esto salía de un endpoint de Anthropic. Con un plan
+   * propio lo dice cada proveedor a su manera, y el motor lo normaliza: la
+   * barra dibuja lo mismo sin saber con quién está hablando.
+   */
+  uso?(): Promise<Medida | undefined>
+  /**
+   * Qué plan usa ahora mismo, para la cabecera.
+   *
+   * Un proveedor puede tener varias puertas con precios distintos; decir solo
+   * su nombre esconde por cuál entraste.
+   */
+  planActual?(): string | undefined
 }

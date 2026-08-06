@@ -32,6 +32,36 @@ export function findServer(config: unknown, cwd: string): unknown {
 }
 
 /**
+ * Cómo levantar el servidor de Packet Tracer, para quien quiera hablarle él.
+ *
+ * Sale de `~/.claude.json`, o sea de lo que ya dejó `bun run setup`. Eso evita
+ * inventar una segunda configuración que diga lo mismo y que se despegue de la
+ * primera la primera vez que alguien mueva el venv de lugar.
+ *
+ * Lo usa el motor propio, que es cliente MCP. El motor que envuelve al CLI no
+ * lo necesita: ahí el que levanta el servidor es el CLI.
+ */
+export function serverSpec(
+  home: string,
+  cwd: string,
+): { command: string; args?: string[]; env?: Record<string, string> } | undefined {
+  let s: unknown
+  try {
+    s = findServer(JSON.parse(readFileSync(`${home}/.claude.json`, "utf8")), cwd)
+  } catch {
+    return undefined
+  }
+  if (typeof s !== "object" || s === null) return undefined
+  const c = s as Record<string, any>
+  if (typeof c.command !== "string" || !c.command) return undefined
+  return {
+    command: c.command,
+    args: Array.isArray(c.args) ? c.args.map(String) : undefined,
+    env: c.env && typeof c.env === "object" ? c.env : undefined,
+  }
+}
+
+/**
  * Si el MCP de Packet Tracer está registrado en el CLI.
  *
  * Es la dependencia que la app NO puede resolver sola: sin ese servidor el
