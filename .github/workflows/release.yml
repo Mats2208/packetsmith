@@ -73,15 +73,28 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      # Los de plataforma PRIMERO: el paquete que los referencia como
-      # dependencias opcionales no puede publicarse antes que ellos, o quien
-      # instale en ese hueco se queda sin binario.
       - name: publicar en npm
         if: ${{ vars.PUBLISH_NPM == 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for d in dist/packetsmith-*/; do
-            npm publish "$d" --access public
-          done
-          npm publish dist/packetsmith --access public
+          # Se saltea lo que ya esté publicado en esta versión.
+          #
+          # npm rechaza republicar una versión existente, así que sin esto un run
+          # que muere a mitad —quedó a mano durante una caída de Actions— deja el
+          # release imposible de reintentar: el reintento falla en el primer
+          # paquete que sí había salido. Publicar es idempotente o no sirve.
+          publicar() {
+            nombre=$(node -p "require('./$1/package.json').name")
+            version=$(node -p "require('./$1/package.json').version")
+            if npm view "$nombre@$version" version >/dev/null 2>&1; then
+              echo "ya estaba: $nombre@$version"
+            else
+              npm publish "$1" --access public
+            fi
+          }
+          # Los de plataforma PRIMERO: el paquete que los referencia como
+          # dependencias opcionales no puede publicarse antes que ellos, o quien
+          # instale en ese hueco se queda sin binario.
+          for d in dist/packetsmith-*/; do publicar "${d%/}"; done
+          publicar dist/packetsmith
