@@ -1,10 +1,10 @@
 // Lo que elegiste tiene que sobrevivir a cerrar la app, y un archivo roto no
 // tiene derecho a impedir que arranque.
 import { expect, test, describe, afterAll } from "bun:test"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { loadConfig, saveConfig } from "../src/config.ts"
+import { guardarModelo, loadConfig, modeloDe, saveConfig } from "../src/config.ts"
 
 const dirs: string[] = []
 const ruta = (contenido?: string) => {
@@ -18,8 +18,8 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 describe("loadConfig", () => {
   test("lee lo que se guardó", () => {
-    const p = ruta('{"theme":"nord","model":"sonnet","effort":"high"}')
-    expect(loadConfig(p)).toEqual({ theme: "nord", model: "sonnet", effort: "high" })
+    const p = ruta('{"theme":"nord","models":{"claude":"sonnet"},"effort":"high"}')
+    expect(loadConfig(p)).toEqual({ theme: "nord", models: { claude: "sonnet" }, effort: "high" })
   })
 
   test("sin archivo no es un error, es el primer arranque", () => {
@@ -36,8 +36,8 @@ describe("loadConfig", () => {
   test("una clave inválida no se lleva puestas a las demás", () => {
     // Un tema que se renombró entre versiones no tiene por qué costarte el
     // modelo, que seguía siendo perfectamente válido.
-    const p = ruta('{"theme":"tema-que-ya-no-existe","model":"opus","effort":"altisimo"}')
-    expect(loadConfig(p)).toEqual({ model: "opus" })
+    const p = ruta('{"theme":"tema-que-ya-no-existe","models":{"claude":"opus"},"effort":"altisimo"}')
+    expect(loadConfig(p)).toEqual({ models: { claude: "opus" } })
   })
 
   test("un tema que no existe se descarta en vez de romper el arranque", () => {
@@ -60,9 +60,33 @@ describe("saveConfig", () => {
   test("fusiona en vez de pisar", () => {
     // Cambiar el tema no tiene por qué borrar el modelo que elegiste antes.
     const p = ruta()
-    saveConfig({ model: "haiku" }, p)
+    saveConfig({ models: { claude: "haiku" } }, p)
     saveConfig({ theme: "dracula" }, p)
-    expect(loadConfig(p)).toEqual({ model: "haiku", theme: "dracula" })
+    expect(loadConfig(p)).toEqual({ models: { claude: "haiku" }, theme: "dracula" })
+  })
+
+  test("el modelo se guarda POR MOTOR", () => {
+    // El bug que esto evita: elegías `sonnet` con Claude, cambiabas a Kimi, y
+    // al arrancar de nuevo la app le pedía a Kimi un modelo llamado `sonnet`.
+    const p = ruta()
+    guardarModelo("claude", "sonnet", p)
+    guardarModelo("kimi", "k3", p)
+    expect(modeloDe("claude", p)).toBe("sonnet")
+    expect(modeloDe("kimi", p)).toBe("k3")
+    expect(modeloDe("openai", p)).toBeUndefined()
+  })
+
+  test("una config vieja con `model` suelto se migra al motor que tenía", () => {
+    // Y NO al que se elija después: ese `sonnet` era de Claude, no de Kimi.
+    const p = ruta('{"engine":"claude","model":"sonnet"}')
+    expect(loadConfig(p)).toEqual({ engine: "claude", models: { claude: "sonnet" } })
+    // Al reescribir, la clave vieja desaparece en vez de quedar ganándole.
+    saveConfig({ theme: "nord" }, p)
+    expect(JSON.parse(readFileSync(p, "utf8")).model).toBeUndefined()
+  })
+
+  test("un `model` suelto sin motor no se le adjudica a nadie", () => {
+    expect(loadConfig(ruta('{"model":"sonnet"}'))).toEqual({})
   })
 
   test("no poder escribir no rompe nada", () => {

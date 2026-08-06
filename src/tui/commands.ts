@@ -8,9 +8,10 @@
 // `run` abre otro diálogo y listo. Eso evita inventar un tipo `Comando con
 // parámetros` que después habría que parsear, validar y completar.
 import { EFFORTS, type Effort } from "../engine/types.ts"
+import type { Medida } from "../engine/providers/usage.ts"
 import { THEMES } from "./themes.ts"
 import { LANGS, T, type Lang } from "./i18n.ts"
-import { findProvider, PROVIDERS } from "../engine/providers/catalog.ts"
+import { findProvider, PROVIDERS, todosLosProveedores, type Plan } from "../engine/providers/catalog.ts"
 import { dialog, type Opcion } from "./picker.tsx"
 
 /** Lo que un comando puede tocar de la app. Lo arma `app.tsx`. */
@@ -39,10 +40,21 @@ export interface CommandCtx {
   exportar(): string
   /** Cambia de motor. Empieza limpio: modelo y sesión son del motor viejo. */
   cambiarMotor(nombre: string): void
-  /** Guarda la API key de un proveedor. Devuelve si se pudo escribir. */
-  guardarKey(provider: string, key: string): boolean
-  /** Si ya hay key para ese proveedor. Nunca devuelve la key. */
+  /** Guarda la API key de un plan. Devuelve si se pudo escribir. */
+  guardarKey(provider: string, plan: string, key: string): boolean
+  /**
+   * Hace el login de dispositivo y guarda la sesión.
+   *
+   * `mostrar` recibe la URL y el código apenas los hay: el sondeo puede tardar
+   * un minuto entero, y una pantalla muda todo ese rato parece colgada.
+   */
+  conectarChatGPT(provider: string, plan: string, mostrar: (url: string, codigo: string) => void): void
+  /** Si ya hay credencial para ese proveedor. Nunca devuelve la credencial. */
   hayKey(provider: string): boolean
+  /** Qué plan tiene elegido, para marcarlo en la lista. */
+  planDe(provider: string): string | undefined
+  /** Cuánto va consumido del plan en uso. `undefined` si no publica medidor. */
+  medidor(): Promise<Medida | undefined>
   /** Los modelos del motor EN USO. Los de Claude no existen en Kimi. */
   modelosDelMotor(): { value: string; description?: string }[]
   idioma: {
@@ -142,9 +154,34 @@ export const COMMANDS: Command[] = [
     category: "agente",
     run(ctx) {
       const { engine, motores } = ctx.estado()
+      // Con ciento cincuenta motores, el orden ES la interfaz: primero los que
+      // ya tenés conectados —que son los que vas a querer— después los curados,
+      // y al final el resto de models.dev. Filtrar tipeando sigue estando.
+      const familia = (m: string) => {
+        if (m === "claude") return T.grupoCli
+        if (ctx.hayKey(m)) return T.grupoConectados
+        return findProvider(m) && PROVIDERS.some((p) => p.id === m)
+          ? T.grupoDestacados
+          : T.grupoTodos
+      }
+      const orden = [T.grupoConectados, T.grupoCli, T.grupoDestacados, T.grupoTodos]
+
       dialog.abrir({
         titulo: T.tituloMotor,
-        opciones: motores.map((m) => opcion({ value: m, title: m, current: m === engine })),
+        opciones: motores
+          .map((m) => ({ m, fam: familia(m) }))
+          .sort((a, b) => orden.indexOf(a.fam) - orden.indexOf(b.fam))
+          .map(({ m, fam }) => {
+            const p = findProvider(m)
+            const planes = p && p.planes.length > 1 ? ` · ${T.nPlanes(p.planes.length)}` : ""
+            return opcion({
+              value: m,
+              title: m,
+              category: fam,
+              description: p ? `${p.label}${planes}` : "",
+              current: m === engine,
+            })
+          }),
         onElegir: (o) => {
           if (o.value === engine) return
           ctx.cambiarMotor(o.value)
@@ -165,26 +202,67 @@ export const COMMANDS: Command[] = [
     name: "app.connect",
     category: "agente",
     run(ctx) {
+      // Dos pasos, porque son dos preguntas distintas: A QUIÉN le hablás y CON
+      // QUÉ PLAN. Kimi Code y la Open Platform son la misma empresa con dos
+      // formas de cobrar; ofrecerlos como dos proveedores era mentir.
+      const pedirCredencial = (provider: string, label: string, plan: Plan) => {
+        if (plan.auth === "chatgpt") {
+          dialog.cerrarTodo()
+          ctx.conectarChatGPT(provider, plan.id, (url, codigo) => {
+            ctx.decir(T.loginDispositivo(url, codigo))
+          })
+          return
+        }
+        dialog.abrir({
+          titulo: `${provider} · ${plan.id}`,
+          opciones: [],
+          escribir: {
+            ayuda: T.pegaLaKey(plan.consola),
+            secreto: true,
+            onAceptar(key) {
+              if (!ctx.guardarKey(provider, plan.id, key)) { ctx.decir(T.noSePudoGuardar); return }
+              ctx.decir(T.keyGuardada(`${label} · ${plan.label}`, provider))
+            },
+          },
+        })
+      }
+
+      // Los mismos ciento cincuenta que `/engine`, con el mismo orden: lo que
+      // ya conectaste arriba, los curados después, el resto al final.
+      const destacados = new Set(PROVIDERS.map((p) => p.id))
+      const familia = (id: string) =>
+        ctx.hayKey(id) ? T.grupoConectados
+        : destacados.has(id) ? T.grupoDestacados
+        : T.grupoTodos
+      const orden = [T.grupoConectados, T.grupoDestacados, T.grupoTodos]
+
       dialog.abrir({
         titulo: T.tituloProveedor,
-        opciones: PROVIDERS.map((p) => opcion({
+        opciones: todosLosProveedores()
+          .sort((a, b) => orden.indexOf(familia(a.id)) - orden.indexOf(familia(b.id)))
+          .map((p) => opcion({
           value: p.id,
           title: p.id,
+          category: familia(p.id),
           description: ctx.hayKey(p.id) ? `${p.label} — ${T.conectado}` : p.label,
           current: ctx.hayKey(p.id),
         })),
         onElegir(o) {
           const p = findProvider(o.value)!
+          // Con un solo plan no hay nada que preguntar: preguntarlo igual sería
+          // un paso que no decide nada.
+          if (p.planes.length === 1) { pedirCredencial(p.id, p.label, p.planes[0]!); return }
+          const actual = ctx.planDe(p.id)
           dialog.abrir({
-            titulo: p.id,
-            opciones: [],
-            escribir: {
-              ayuda: T.pegaLaKey(p.consola),
-              secreto: true,
-              onAceptar(key) {
-                if (!ctx.guardarKey(p.id, key)) { ctx.decir(T.noSePudoGuardar); return }
-                ctx.decir(T.keyGuardada(p.label, p.id))
-              },
+            titulo: `${p.id} · ${T.tituloPlan}`,
+            opciones: p.planes.map((pl) => opcion({
+              value: pl.id,
+              title: pl.id,
+              description: pl.label,
+              current: pl.id === actual,
+            })),
+            onElegir(e) {
+              pedirCredencial(p.id, p.label, p.planes.find((x) => x.id === e.value)!)
             },
           })
         },
@@ -300,6 +378,25 @@ export const COMMANDS: Command[] = [
         `| turns | ${e.turnos} |`,
         `| cost | $${e.costoUsd.toFixed(4)} |`,
       ].join("\n"))
+    },
+  },
+  {
+    // Cuánto va consumido del plan.
+    //
+    // Con una suscripción no hay precio por token que contar, así que sin esto
+    // el plan es una caja negra hasta que te corta.
+    name: "app.usage",
+    category: "utilidad",
+    run(ctx) {
+      ctx.medidor().then((m) => {
+        if (!m) { ctx.decir(T.sinMedidor); return }
+        const filas: string[] = ["| | |", "|---|---|"]
+        if (m.sesion !== undefined) filas.push(`| ${m.ventana ?? "ventana"} | ${Math.round(m.sesion)}% usado |`)
+        if (m.semanal !== undefined) filas.push(`| total | ${Math.round(m.semanal)}% usado |`)
+        if (m.reinicio) filas.push(`| se repone | ${new Date(m.reinicio * 1000).toLocaleString()} |`)
+        if (m.nota) filas.push(`| | ${m.nota} |`)
+        ctx.decir(filas.length > 2 ? filas.join("\n") : (m.nota ?? T.sinMedidor))
+      })
     },
   },
   {

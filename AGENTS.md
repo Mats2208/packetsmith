@@ -35,28 +35,47 @@ agent is working, not after it finished. That distinction is the whole point of 
 
 | | |
 |---|---|
-| `src/engine/` | spawns the agent CLI and turns its output into `AgentEvent`. One file per engine. |
+| `src/engine/` | every engine, of both classes below. All of them emit `AgentEvent`. |
+| `src/engine/providers/` | the three LLM wire protocols, the provider/plan table (`catalog.ts`), the live model catalog (`models-dev.ts`), the usage meters (`usage.ts`) and the ChatGPT device login. |
+| `src/mcp/` | our own MCP client over stdio. Declares no tools — it asks the server for them. |
 | `src/topology/` | the network model, built from `pt_*` tool results. No rendering logic. |
 | `src/tui/` | OpenTUI + Solid components. No business logic. |
 
 ## Architecture, in one paragraph
 
-PacketSmith does **not** implement an agent loop. It spawns an existing agent CLI
-(`claude`, later `codex` / `opencode`) in streaming mode and translates whatever that CLI
-emits into a single `AgentEvent` union. The left panel renders the conversation; the right
-panel derives the network topology from the `tool_end` events of `pt_*` calls.
+Engines come in **two classes**, and the difference decides where the agent loop lives.
 
-**The TUI never talks to the MCP server directly.** The Packet Tracer MCP binds
-`127.0.0.1:54321` and only one process can hold it — opening our own client would spawn a
-second server instance and the two would fight over the port. Everything the right panel
-needs already arrives in the agent's stream.
+`claude` **wraps** an agent that already exists: the CLI runs the loop, talks to the MCP and
+resolves permissions, and we read its stream. It is the only way to spend a Pro/Max
+subscription, because that subscription has no API — opencode did not find a way around it
+either, its own dialog labels Anthropic `"(API key)"`.
+
+Every other engine **is** the agent (`src/engine/agent.ts`). It spawns the MCP server
+itself, runs the tool loop and speaks HTTP straight to a provider. What that buys is a
+system prompt that is ours, the tools we choose, and a loop you can read.
+
+Both emit the same `AgentEvent` union, so the interface never learns which one is running.
+The left panel renders the conversation; the right panel derives the topology from the
+`tool_end` events of `pt_*` calls.
+
+**No tool is ever declared in this repo.** The MCP server is asked (`tools/list`) and its 61
+tools arrive with their JSON Schema already attached — which is exactly the shape function
+calling wants. When MCP-Packet-Tracer adds tool 62 it shows up on its own: nothing to sync,
+no mirror to rot.
 
 ### Known limitation: one MCP client at a time
 
-The same constraint bites from outside. If Claude Code (or Cursor, or Claude Desktop) is
-running with the Packet Tracer MCP configured, **it already owns `:54321`**. PacketSmith's
-agent then spawns its own MCP instance whose bridge cannot bind the port, and every `pt_*`
-call answers:
+The Packet Tracer MCP binds `127.0.0.1:54321` and only one process can hold it. **The port
+belongs to the Python server, not to Packet Tracer** — verified in its source — so two live
+servers fight over it.
+
+That is why the old rule was "the TUI never talks to the MCP": with the `claude` CLI in the
+middle, opening a second client meant a second server. With an HTTP engine the CLI is not
+running, so there is exactly one server and the rule falls away by itself.
+
+From outside, the constraint still bites. If Claude Code (or Cursor, or Claude Desktop) is
+running with the Packet Tracer MCP configured, **it already owns `:54321`**, our MCP
+instance cannot bind, and every `pt_*` call answers:
 
 ```
 Packet Tracer no está conectado por ningún canal.
@@ -248,13 +267,29 @@ always holds the current state; the plan is a log of what changed.
 
 ## Engine adapters
 
-Adding an engine is one file plus one line in `src/engine/index.ts`. The contract:
+Adding an engine that **wraps a CLI** is one file plus one line in `src/engine/index.ts`.
+Adding an engine that **is** the agent is a few lines in `src/engine/providers/catalog.ts`.
+
+That table has **two levels, and the difference is load-bearing**:
+
+- a **provider** is who answers you — Kimi, OpenAI, Z.AI;
+- a **plan** is the door you come in through and how you pay — the coding subscription, the
+  metered API, the ChatGPT plan. It changes the URL, the protocol, the models, the price,
+  and even how you authenticate.
+
+Everything that varies lives on the plan. Flattening the two was a real bug: `kimi` and
+`moonshot` shipped as two providers in `/engine` when they are one company charging two
+ways, and a key for one 401s against the other.
+
+The contract:
 
 ```ts
 interface Engine {
   readonly name: string
   start(opts: StartOpts): Session
   describe?(): Record<string, string>   // shown by /debug
+  models?(): { value: string }[]        // offered by /model
+  sinCostoPorToken?: boolean            // subscription: hide the $ counter
 }
 
 interface Session {
@@ -281,6 +316,100 @@ give haiku a fact, relaunch with sonnet, it still remembers.
 
 Each CLI has its own output format and its own quirks. Say which engine you tested with;
 they do not behave the same.
+
+### The three LLM protocols
+
+`protocolo` on the plan picks one. They are not variants of one format.
+
+| | OpenAI (`/chat/completions`) | Anthropic (`/v1/messages`) | Responses (`/responses`) |
+|---|---|---|---|
+| system | a message | its own top-level field | `instructions` |
+| history | messages with roles | messages with roles | a flat list of **items** |
+| tools | `function.parameters` | `input_schema` | flat `{type,name,parameters}` |
+| streaming | deltas on `choices` | typed block events | named events |
+| token usage | needs `stream_options.include_usage`, in a chunk with no `choices` | `message_start` / `message_delta` | `response.completed` |
+
+Subscription coding plans expose whatever surface their vendor's CLI uses; metered APIs
+expose the OpenAI one. **Kimi Code (`sk-kimi-` keys, `api.kimi.com/coding`) is Anthropic
+and is a different product from the Moonshot platform** — each key 401s against the other's
+endpoint. **The ChatGPT plan is Responses**, at `chatgpt.com/backend-api/codex/responses`,
+and has no API key at all: it is an OAuth device login whose access token expires hourly.
+
+Four traps, each of which breaks a naive implementation:
+
+- **OpenAI:** a tool's arguments do not arrive whole. Accumulate them by **index** — not by
+  id, which is missing from the middle deltas — as raw text, and parse only at close.
+- **Anthropic:** every tool result goes in **one** user message. Sent one per message, the
+  next request is rejected.
+- **Anthropic + extended thinking:** `thinking` blocks must be returned **verbatim, with
+  their signature**. Rebuilding the assistant message from text plus tool calls gives a 400.
+  Kimi K3 thinks by default, so this is not an edge case — it is every turn.
+- **Responses + `store: false`:** same shape, different name. We do not leave the
+  conversation on anyone's server, so `reasoning` items must be echoed back with their
+  `encrypted_content` — which is why the request asks for
+  `include: ["reasoning.encrypted_content"]`.
+
+The last three only break on the **second** loop iteration, after tools already ran against
+Packet Tracer. `test/anthropic.test.ts` and `test/providers.test.ts` build that
+second-iteration history by hand.
+
+### The palette is a list, not a board
+
+It was a board — every command visible at once, grouped by family, two rows. It looked good
+and was annoying to use: on a board `←→` means *the one next to it* and `⇅` means *another
+family*, so moving between two options that read as neighbours could cost a family jump and
+a jump back. Hands expect `⇅` to walk options.
+
+It is a list now, and the four things that make it not a plain list are the point:
+a row per option **with its description** (comparing two used to mean moving back and
+forth), a family header where the family changes, a scrolling window with an `n/N` counter,
+and the typed filter visible at the top instead of hidden in a corner.
+
+`listado()` is pure and exported for exactly one reason: a bad scroll offset puts the
+cursor outside the window and the list looks frozen. That is tested without mounting
+anything.
+
+The counter is not decoration either — `/engine` now lists ~150 providers.
+
+### Model lists are fetched, not written
+
+A hardcoded model list is born stale — this repo offered `glm-4.6` while Z.AI was already
+shipping `glm-5.2`, and nothing failed loudly. `src/engine/providers/models-dev.ts` reads
+the live catalog from **models.dev** (the same source opencode uses), caches it under
+`~/.packetsmith/models.json`, and refreshes in the background when the copy is over 12h
+old. The list in `catalog.ts` is only the offline fallback.
+
+It also filters on `tool_call`: a model that cannot call tools cannot drive Packet Tracer,
+and offering it in `/model` offers something that fails on the first turn.
+
+**Providers are discovered the same way.** `todosLosProveedores()` returns the six curated
+ones — the only place a plan, a protocol override or a usage meter can be declared — plus
+every models.dev provider that has an HTTPS base URL, documented env vars, a tool-calling
+model, and an SDK whose protocol we actually speak. That last filter is a *whitelist*: a
+provider on `@ai-sdk/amazon-bedrock` speaks something this repo does not implement, and
+offering it would fail on the first message.
+
+### The model is saved per engine
+
+`config.json` stores `models: { claude: "sonnet", kimi: "k3" }`, not one `model`. The flat
+version was a bug with teeth: pick `sonnet` under Claude, switch to Kimi, restart, and the
+app asked Kimi for a model called `sonnet`. Aliases from one provider do not exist in
+another. Old configs migrate to the engine they were saved under, and only that one.
+
+### Usage meters
+
+With the `claude` CLI the plan gauge came from an Anthropic endpoint. With our own
+providers nothing arrived, and on a **subscription** that is worse than on a metered API —
+there is no per-token price to count, so the bar read `$0.0000` and nothing told you how
+much was left until a turn got cut off.
+
+Each plan says where its number comes from (`medidor` in the catalog), and `usage.ts`
+normalizes wildly different shapes — percentages, dollar balances, absolute quotas — into
+the one the status bar already knows how to draw. Verified live: Kimi Code answers
+`GET /coding/v1/usages` with a 5-hour window and a weekly one.
+
+If the endpoint does not answer, the meter turns off and the app carries on. A meter is
+information, not a dependency.
 
 ## Related projects
 

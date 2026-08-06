@@ -8,7 +8,7 @@
 import { expect, test, describe, afterEach } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { App } from "../src/tui/app.tsx"
-import { anchoFamilia, anchoOpcion, dialog, filas, filtrar, hayDialogo, puntaje, type Opcion } from "../src/tui/picker.tsx"
+import { dialog, filtrar, hayDialogo, listado, puntaje, VENTANA, type Opcion } from "../src/tui/picker.tsx"
 import { COMMANDS, textoDe } from "../src/tui/commands.ts"
 import { setTheme, theme } from "../src/tui/theme.ts"
 import { LANGS, setIdioma, T } from "../src/tui/i18n.ts"
@@ -92,7 +92,7 @@ describe("filtrar", () => {
   })
 })
 
-describe("el tablero", () => {
+describe("la lista", () => {
   const op = (title: string, category: string): Opcion => ({ value: title, title, category })
   const CINCO = [
     op("/model", "agente"), op("/effort", "agente"), op("/engine", "agente"),
@@ -100,55 +100,62 @@ describe("el tablero", () => {
     op("/help", "utilidad"),
   ]
 
-  test("una familia por renglón", () => {
-    const f = filas(CINCO, 120)
-    expect(f).toHaveLength(3)
-    expect(f[0]).toEqual({ familia: "agente", indices: [0, 1, 2] })
-    expect(f[1]).toEqual({ familia: "apariencia", indices: [3] })
+  test("una fila por opción, con encabezado donde cambia la familia", () => {
+    const l = listado(CINCO, 0)
+    expect(l).toEqual([
+      { tipo: "familia", texto: "agente" },
+      { tipo: "opcion", i: 0 }, { tipo: "opcion", i: 1 }, { tipo: "opcion", i: 2 },
+      { tipo: "familia", texto: "apariencia" },
+      { tipo: "opcion", i: 3 },
+      { tipo: "familia", texto: "utilidad" },
+      { tipo: "opcion", i: 4 },
+    ])
   })
 
-  test("una familia que no entra se parte, sin repetir el nombre", () => {
-    // Repetir la etiqueta en la continuación haría parecer que son dos
-    // familias distintas, que es justo lo que el agrupado viene a evitar.
-    const angosto = filas(CINCO, 35)
-    expect(angosto[0]!.familia).toBe("agente")
-    expect(angosto[1]!.familia).toBe("")
-    expect(angosto[1]!.indices.length).toBeGreaterThan(0)
+  test("sin familias no hay encabezados que gasten filas", () => {
+    // Los diálogos de tema, modelo y esfuerzo no tienen familias.
+    const temas = [{ value: "ice", title: "ice" }, { value: "nord", title: "nord" }]
+    expect(listado(temas, 0)).toEqual([{ tipo: "opcion", i: 0 }, { tipo: "opcion", i: 1 }])
   })
 
   test("los índices cubren la lista entera, sin huecos ni repetidos", () => {
-    // El cursor es UNO solo sobre la lista plana; si los índices no la
+    // El cursor es UNO solo sobre la lista filtrada; si los índices no la
     // cubrieran exactamente, moverse saltearía comandos.
-    for (const ancho of [20, 35, 60, 120]) {
-      expect(filas(CINCO, ancho).flatMap((f) => f.indices)).toEqual([0, 1, 2, 3, 4])
+    const idx = listado(CINCO, 0).filter((e) => e.tipo === "opcion").map((e: any) => e.i)
+    expect(idx).toEqual([0, 1, 2, 3, 4])
+  })
+
+  test("una lista larga se recorta a la ventana", () => {
+    const muchas = Array.from({ length: 40 }, (_, i) => ({ value: `m${i}`, title: `m${i}` }))
+    expect(listado(muchas, 0)).toHaveLength(VENTANA)
+  })
+
+  test("el cursor SIEMPRE queda dentro de la ventana", () => {
+    // Es lo que se rompe sin que se note: con un desplazamiento mal calculado
+    // la selección se va fuera de la vista y la lista parece trabada.
+    const muchas = Array.from({ length: 40 }, (_, i) => ({ value: `m${i}`, title: `m${i}` }))
+    for (const c of [0, 1, 7, 8, 20, 38, 39]) {
+      const l = listado(muchas, c)
+      expect(l.some((e) => e.tipo === "opcion" && e.i === c)).toBe(true)
     }
   })
 
-  test("el hueco entre opciones NO es parte del resaltado", () => {
-    // El recuadro del elegido tiene que quedar con el mismo relleno de los dos
-    // lados. Cuando todo era una sola cadena, el punto del que está en uso se
-    // comía el relleno izquierdo y `●ice` salía pegado al recuadro anterior.
-    const ancho = anchoOpcion({ value: "a", title: "ice" })
-    // hueco + relleno + nombre + relleno
-    expect(ancho).toBe(1 + 1 + "ice".length + 1)
+  test("al final de una lista larga la ventana no se pasa del borde", () => {
+    const muchas = Array.from({ length: 40 }, (_, i) => ({ value: `m${i}`, title: `m${i}` }))
+    const l = listado(muchas, 39)
+    expect(l).toHaveLength(VENTANA)
+    expect((l.at(-1) as { i: number }).i).toBe(39)
   })
 
-  test("las opciones se empaquetan según lo que miden", () => {
-    // Alineadas a la más larga, `/mcp` arrastraba ocho espacios detrás solo
-    // porque en otro renglón existe `/topology`, y el tablero quedaba
-    // desparramado. Empaquetadas, un renglón ocupa lo que pesa.
-    expect(anchoOpcion({ value: "a", title: "/mcp" })).toBeLessThan(
-      anchoOpcion({ value: "b", title: "/topology" }))
-  })
-
-  test("sin familias la columna de etiqueta no gasta espacio", () => {
-    // Los diálogos de tema, modelo y esfuerzo no tienen familias.
-    const temas = [{ value: "ice", title: "ice" }, { value: "nord", title: "nord" }]
-    expect(anchoFamilia(temas)).toBeLessThan(anchoFamilia(CINCO))
-  })
-
-  test("en una terminal muy angosta igual entra una opción por renglón", () => {
-    expect(filas(CINCO, 18).every((f) => f.indices.length >= 1)).toBe(true)
+  test("no se corta dejando un encabezado huérfano arriba", () => {
+    // Un encabezado en la primera fila cuya familia se cortó abajo no dice de
+    // qué grupo es lo que estás mirando.
+    const largas = [
+      ...Array.from({ length: 6 }, (_, i) => op(`/a${i}`, "agente")),
+      ...Array.from({ length: 6 }, (_, i) => op(`/b${i}`, "apariencia")),
+    ]
+    const l = listado(largas, 7)
+    expect(l.at(-1)!.tipo).not.toBe("familia")
   })
 })
 

@@ -26,7 +26,18 @@ export interface ToolSpec {
 
 export type Mensaje =
   | { role: "system" | "user"; content: string }
-  | { role: "assistant"; content: string; tool_calls?: ToolCallHecha[] }
+  | {
+      role: "assistant"
+      content: string
+      tool_calls?: ToolCallHecha[]
+      /**
+       * Los bloques tal como los mandó el proveedor.
+       *
+       * Solo lo usa el protocolo de Anthropic: con razonamiento extendido hay
+       * que devolverlos INTACTOS, con su firma, o el pedido siguiente da 400.
+       */
+      bloques?: unknown[]
+    }
   | { role: "tool"; tool_call_id: string; content: string }
 
 export interface ToolCallHecha {

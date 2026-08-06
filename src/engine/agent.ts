@@ -15,8 +15,20 @@ import type { AgentEvent, Effort } from "./types.ts"
 import type { McpClient } from "../mcp/client.ts"
 import { textoDeContenido } from "../mcp/client.ts"
 import {
-  turno, type Mensaje, type ProviderConfig, type ToolCallHecha, type ToolSpec,
+  turno as turnoOpenAI,
+  type Mensaje, type ProviderConfig, type ToolCallHecha, type ToolSpec, type Turno,
 } from "./providers/openai-compat.ts"
+import { turno as turnoAnthropic } from "./providers/anthropic-messages.ts"
+import { turno as turnoResponses } from "./providers/openai-responses.ts"
+
+/**
+ * Lo que devuelve un turno, hable el dialecto que hable.
+ *
+ * `bloques` solo lo trae el de Anthropic —son sus bloques crudos, con la firma
+ * del razonamiento— y por eso es opcional: el bucle lo guarda si está y no
+ * pregunta con quién está hablando.
+ */
+type FinDeTurno = Turno & { bloques?: unknown[] }
 
 /**
  * Tope de vueltas por turno.
@@ -29,6 +41,15 @@ const MAX_VUELTAS = 60
 
 export interface AgentOpts {
   provider: ProviderConfig
+  /**
+   * Qué dialecto habla el proveedor.
+   *
+   * No son variantes del mismo formato: `system` va en otro lado, las tools se
+   * declaran distinto y el streaming va por bloques en vez de por deltas de
+   * `choices`. Los planes de suscripción de coding suelen exponer el de
+   * Anthropic o el de Responses; las APIs por token, el de OpenAI.
+   */
+  protocolo?: "openai" | "anthropic" | "responses"
   mcp: McpClient
   systemPrompt: string
   /** Cuánto razona. Se traduce a lo que entienda el proveedor. */
@@ -117,7 +138,10 @@ export class Agent {
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       yield { type: "phase", phase: "requesting" }
 
-      const stream = turno(this.opts.provider, this.mensajes, this.specs(), this.abort.signal)
+      const hablar = this.opts.protocolo === "anthropic" ? turnoAnthropic
+        : this.opts.protocolo === "responses" ? turnoResponses
+        : turnoOpenAI
+      const stream = hablar(this.opts.provider, this.mensajes, this.specs(), this.abort.signal)
       let razonando = 0
       let escribiendo = false
       let r: IteratorResult<any, any>
@@ -142,7 +166,7 @@ export class Agent {
         if (t.tipo === "uso") ultimoUso = { entrada: t.entrada, salida: t.salida }
       }
 
-      const fin = r.value as Awaited<ReturnType<typeof turno>> extends AsyncGenerator<any, infer R> ? R : never
+      const fin = r.value as FinDeTurno
       if (fin.uso) ultimoUso = fin.uso
       if (ultimoUso && this.opts.precio) {
         costo += (ultimoUso.entrada * this.opts.precio.entrada +
@@ -165,7 +189,14 @@ export class Agent {
 
       // El mensaje del asistente CON sus tool_calls tiene que quedar en el
       // historial antes de los resultados, o la API rechaza el próximo pedido.
-      this.mensajes.push({ role: "assistant", content: fin.texto, tool_calls: fin.calls })
+      // Los bloques crudos van si el proveedor los dio: con razonamiento
+      // extendido hay que devolverlos con su firma o el pedido siguiente falla.
+      this.mensajes.push({
+        role: "assistant",
+        content: fin.texto,
+        tool_calls: fin.calls,
+        ...(fin.bloques?.length ? { bloques: fin.bloques } : {}),
+      })
 
       for (const call of fin.calls) {
         yield* this.ejecutar(call)

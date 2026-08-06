@@ -20,8 +20,9 @@ import { Gauge, Hairline, Hud } from "./frame.tsx"
 import { dialog, hayDialogo, Picker, registrarPaleta } from "./picker.tsx"
 import { comandoPorTitulo, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
 import { aplicarEfectos } from "./effects.ts"
-import { saveConfig } from "../config.ts"
-import { apiKey, setApiKey } from "../auth.ts"
+import { guardarModelo, modeloDe, saveConfig } from "../config.ts"
+import { hayCredencial, planElegido, setApiKey, setOauth, setPlan } from "../auth.ts"
+import { iniciarLogin } from "../engine/providers/oauth-chatgpt.ts"
 
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
@@ -154,7 +155,11 @@ export function App(props: {
   const [busy, setBusy] = createSignal(false)
   const [topology, setTopology] = createSignal<Topology>(EMPTY)
   const [lastTool, setLastTool] = createSignal<string>()
-  const [model, setModel] = createSignal(props.model ?? "…")
+  // `undefined` y no "…": los puntos suspensivos son lo que se DIBUJA cuando no
+  // se sabe, no un valor. Guardados acá, `model() || modelPedido()` se quedaba
+  // con ellos para siempre —una cadena no vacía gana el `||`— y la cabecera
+  // decía `MODEL …` aunque acabaras de elegir uno.
+  const [model, setModel] = createSignal<string | undefined>(props.model)
   const [cost, setCost] = createSignal(0)
   const [toolCount, setToolCount] = createSignal(0)
   // Enlace con Packet Tracer: se deduce de si la ultima pt_* respondio bien.
@@ -192,20 +197,6 @@ export function App(props: {
     onCleanup(() => clearInterval(id))
   })
 
-  // Porcentaje de plan consumido. No viene en el stream: hay que pedírselo a
-  // Anthropic con el token que el CLI ya guardó.
-  //
-  // Se apaga con PACKETSMITH_NO_QUOTA para quien no quiera que la app toque su
-  // Keychain, y con `props.quota` para el preview: montarlo abriría el diálogo
-  // de permisos del sistema, y un preview no tiene por qué pedirle permiso a
-  // nadie.
-  const [quota, setQuota] = createSignal<Quota | undefined>(props.quota)
-  onMount(() => {
-    if (props.quota || motor().name !== "claude" || process.env.PACKETSMITH_NO_QUOTA) return
-    const stop = pollQuota(homedir(), setQuota)
-    onCleanup(stop)
-  })
-
   // Lo que se le pide al motor. Son señales porque `/model` y `/effort` las
   // cambian en caliente, y la cabecera tiene que reflejarlo enseguida.
   const [motor, setMotor] = createSignal(props.engine)
@@ -213,6 +204,92 @@ export function App(props: {
   const [effort, setEffort] = createSignal<Effort>(props.effort ?? "medium")
   const [sessionId, setSessionId] = createSignal("")
   const [efectosOn, setEfectosOn] = createSignal(false)
+
+  // ── Medidor de plan ───────────────────────────────────────────────────────
+  //
+  // Cuánto llevás consumido. No viene en el stream de nadie: hay que
+  // preguntárselo al proveedor, y cada uno lo publica a su manera.
+  //
+  // Va en un `createEffect` sobre `motor()` y NO en `onMount`, que es lo que
+  // era: montado una sola vez, el medidor se quedaba con el número del primer
+  // motor para siempre. Con Kimi arrancaba bien, cambiabas a Claude, y la barra
+  // seguía mostrando el consumo de Kimi — que es peor que no mostrar nada,
+  // porque parece un dato.
+  //
+  // Se apaga con PACKETSMITH_NO_QUOTA para quien no quiera que la app toque su
+  // Keychain, y con `props.quota` para el preview: montarlo abriría el diálogo
+  // de permisos del sistema, y un preview no tiene por qué pedirle permiso a
+  // nadie.
+  const [quota, setQuota] = createSignal<Quota | undefined>(props.quota)
+  // Etiqueta de la ventana corta. La dice el proveedor: Kimi informa 300
+  // minutos, Claude `five_hour`. Asumir `5H` para todos sería inventar.
+  const [ventana, setVentana] = createSignal<string | undefined>(undefined)
+
+  createEffect(() => {
+    const m = motor()
+    if (props.quota || process.env.PACKETSMITH_NO_QUOTA) return
+
+    // Lo del motor anterior se borra ANTES de pedir lo nuevo. Dejarlo mientras
+    // llega la respuesta muestra el consumo de otro plan como si fuera de este.
+    setQuota(undefined)
+    setVentana(undefined)
+
+    if (m.name === "claude") {
+      const stop = pollQuota(homedir(), setQuota)
+      onCleanup(stop)
+      return
+    }
+
+    // Los demás lo publican cada uno a su manera y el motor lo normaliza. Se
+    // pide al arrancar y cada cinco minutos: son ventanas de horas, sondearlo
+    // más seguido es gastar pedidos para ver el mismo número.
+    let vivo = true
+    const pedir = () => {
+      m.uso?.().then((u) => {
+        if (!vivo || !u) return
+        setVentana(u.ventana)
+        setQuota({
+          ...(u.sesion !== undefined ? { session: u.sesion } : {}),
+          ...(u.semanal !== undefined ? { weekly: u.semanal } : {}),
+        })
+      }).catch(() => {})
+    }
+    pedir()
+    const id = setInterval(pedir, 5 * 60_000)
+    onCleanup(() => { vivo = false; clearInterval(id) })
+  })
+
+
+  /**
+   * Quién contesta, para la cabecera.
+   *
+   * Sale del motor Y de su plan: con Kimi conectado por suscripción decir solo
+   * `KIMI` esconde que hay dos puertas con precios distintos.
+   */
+  const etiquetaProveedor = () => {
+    const nombre = motor().name.toUpperCase()
+    const plan = motor().planActual?.()
+    return plan ? `${nombre}/${plan.toUpperCase()}` : nombre
+  }
+
+  /**
+   * Qué modelo, de verdad.
+   *
+   * El que informó el motor en `ready` GANA sobre el que le pedimos: si le
+   * pedimos uno que no tiene, queremos ver el que usó y no el que quisimos.
+   * Mientras no llegó ese evento se muestra el pedido, y si no hay ninguno, `…`.
+   */
+  const etiquetaModelo = () =>
+    (model() || modelPedido() || "…").toUpperCase().replace(/^CLAUDE-/, "")
+
+  /**
+   * Cuánto razona. Va en la cabecera porque cambia lo que pagás y lo que tardás.
+   *
+   * Estaba solo en `/debug`: elegías `xhigh`, la app tardaba el triple y no
+   * había nada en pantalla que lo explicara.
+   */
+  const etiquetaEsfuerzo = () => effort().toUpperCase()
+
   // Lee el campo de escritura EN EL MOMENTO. Lo pone `Prompt` al montarse. La
   // paleta lo consulta para saber si una `/` abre la lista o es solo una barra
   // en el medio de una frase; una señal actualizada por `onContentChange`
@@ -400,7 +477,8 @@ export function App(props: {
       if (cambios.effort) setEffort(cambios.effort)
       // Se guarda lo elegido: si tuviste que entrar acá a cambiarlo, la próxima
       // vez lo vas a querer igual.
-      saveConfig({ model: modelPedido(), effort: effort() })
+      if (modelPedido()) guardarModelo(motor().name, modelPedido()!)
+      saveConfig({ effort: effort() })
       // Se reanuda si ya hubo sesión: cambiar de modelo no tiene por qué
       // costarte la conversación.
       arrancar(sessionId() || undefined)
@@ -438,16 +516,36 @@ export function App(props: {
       setMotor(e)
       // Modelo y sesión son del motor viejo: los alias de Claude no existen en
       // Kimi, y el id de sesión tampoco. Se empieza limpio.
-      setModelPedido(undefined)
+      // El modelo es del motor viejo. Se recupera el que se haya elegido para
+      // el nuevo, si hubo, y si no arranca con el suyo por defecto.
+      setModelPedido(modeloDe(nombre))
+      setModel(modeloDe(nombre))
       setSessionId("")
       setToolCount(0)
       arrancar()
       saveConfig({ engine: nombre })
     },
     modelosDelMotor: () => motor().models?.() ?? [],
-    guardarKey: (provider, key) => setApiKey(provider, key),
-    // Devuelve SI hay key, nunca cuál. La key no sale de `auth.ts`.
-    hayKey: (provider) => Boolean(apiKey(provider)),
+    guardarKey: (provider, plan, key) => setApiKey(provider, key, plan),
+    // Devuelve SI hay credencial, nunca cuál. No sale de `auth.ts`.
+    hayKey: (provider) => hayCredencial(provider),
+    planDe: (provider) => planElegido(provider),
+    medidor: () => motor().uso?.() ?? Promise.resolve(undefined),
+    conectarChatGPT(provider, plan, mostrar) {
+      // El plan queda anotado ANTES de que termine el login: si se cancela a
+      // mitad, `/connect` vuelve a abrir en el plan que se estaba intentando y
+      // no en el primero de la lista.
+      setPlan(provider, plan)
+      iniciarLogin()
+        .then((login) => {
+          mostrar(login.url, login.codigo)
+          return login.esperar().then((t) => {
+            if (!setOauth(provider, t, plan)) { decir(T.noSePudoGuardar); return }
+            decir(T.loginListo(provider))
+          })
+        })
+        .catch((e) => decir(T.loginFallo(e instanceof Error ? e.message : String(e))))
+    },
     idioma: {
       actual: idioma,
       poner(l) {
@@ -474,7 +572,10 @@ export function App(props: {
     },
     estado: () => ({
       engine: motor().name,
-      model: model(),
+      // El que informó el motor, o el que le pedimos: `/model` marca el que
+      // está en uso comparando contra esto, y con el motor recién cambiado
+      // todavía no llegó el `ready` que lo confirma.
+      model: model() ?? modelPedido() ?? "",
       effort: effort(),
       sessionId: sessionId(),
       motor: motor().describe?.() ?? {},
@@ -539,10 +640,12 @@ export function App(props: {
             // El nombre es lo único de marca en la cabecera. El resto son
             // datos, y los datos no llevan color de marca.
             { text: "PACKETSMITH", fg: C.brand },
-            { text: motor().name.toUpperCase(), fg: C.fg },
-            // El motor ya dijo "CLAUDE"; repetirlo en el modelo daba
-            // "CLAUDE ▏ CLAUDE-OPUS-5", que ocupa el doble y no dice más.
-            { text: model().toUpperCase().replace(/^CLAUDE-/, "") },
+            // Proveedor y modelo van ETIQUETADOS y no sueltos. Sin etiqueta se
+            // leían como una sola cosa, y cuando el modelo quedaba viejo la
+            // cabecera decía "KIMI · SONNET" sin que nada delatara el error.
+            { text: `PROVIDER ${etiquetaProveedor()}`, fg: C.fg },
+            { text: `MODEL ${etiquetaModelo()}` },
+            { text: `EFFORT ${etiquetaEsfuerzo()}` },
             { text: `${toolCount()} TOOLS` },
           ]}
           tail={<text style={{ fg: C.dim }}>{`REV ${REV}`}</text>}
@@ -587,9 +690,19 @@ export function App(props: {
           segments={[
             { text: T.turnos(turns().length) },
             { text: T.nodosBarra(topology().devices.length) },
-            { text: `$${cost().toFixed(4)}` },
+            // Un motor de suscripción no cobra por token: el peso marcaría
+            // `$0.0000` toda la sesión, que se lee como contador roto.
+            ...(motor().sinCostoPorToken ? [] : [{ text: `$${cost().toFixed(4)}` }]),
           ]}
-          tail={<Budget usage={usage()} limits={limits()} quota={quota()} now={now()} />}
+          tail={
+            <Budget
+              usage={usage()}
+              limits={limits()}
+              quota={quota()}
+              ventana={ventana()}
+              now={now()}
+            />
+          }
         />
       </box>
 
@@ -620,12 +733,16 @@ export function App(props: {
  * datos ya venían en el stream del CLI —`usage` y `rate_limit_event`— sin que
  * hubiera que leer el token de OAuth ni pegarle a ningún endpoint aparte.
  */
-function Budget(props: { usage?: Usage; limits?: Limits; quota?: Quota; now: number }) {
+function Budget(props: {
+  usage?: Usage; limits?: Limits; quota?: Quota; ventana?: string; now: number
+}) {
   const ctx = () => (props.usage ? props.usage.tokens / props.usage.contextWindow : 0)
   const chip = () => (props.limits ? limitChip(props.limits, props.now) : undefined)
   // La etiqueta de la ventana sale del stream; el porcentaje, del endpoint. Si
   // el stream todavía no dijo cuál es la ventana, `5H` es la del plan estándar.
-  const win = () => (props.limits ? windowLabel(props.limits.window) : "5H")
+  // La etiqueta la dice quien la sepa: el proveedor HTTP la manda medida, el
+  // CLI la manda por nombre. `5H` solo si ninguno de los dos habló todavía.
+  const win = () => props.ventana ?? (props.limits ? windowLabel(props.limits.window) : "5H")
 
   return (
     <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>

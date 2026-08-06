@@ -73,10 +73,21 @@ export interface Textos {
   tituloMotor: string
   tituloIdioma: string
   tituloProveedor: string
+  tituloPlan: string
+  nPlanes: (n: number) => string
+  grupoConectados: string
+  grupoCli: string
+  grupoDestacados: string
+  grupoTodos: string
   conectado: string
   pegaLaKey: (consola: string) => string
   keyGuardada: (label: string, id: string) => string
   noSePudoGuardar: string
+  loginDispositivo: (url: string, codigo: string) => string
+  loginListo: (label: string) => string
+  loginFallo: (motivo: string) => string
+  sinMedidor: string
+  tituloUso: string
 
   // ── Comandos ─────────────────────────────────────────────────────────────
   cat: Record<"agente" | "apariencia" | "pt" | "utilidad", string>
@@ -153,7 +164,7 @@ const es: Textos = {
   describiLaRed: "describí la red que querés  ·  / para comandos",
 
   nadaCoincide: "  nada coincide",
-  ayudaTeclas: "←→ ⇅ ⏎ esc ",
+  ayudaTeclas: "⇅ mover · ←→ familia · ⏎ elegir · esc ",
   tituloComandos: "comandos",
   tituloTema: "tema",
   tituloModelo: "modelo",
@@ -161,26 +172,41 @@ const es: Textos = {
   tituloMotor: "motor",
   tituloIdioma: "idioma",
   tituloProveedor: "proveedor",
+  tituloPlan: "plan",
+  nPlanes: (n) => `${n} planes`,
+  grupoConectados: "conectados",
+  grupoCli: "por CLI",
+  grupoDestacados: "destacados",
+  grupoTodos: "todos",
   conectado: "conectado",
   pegaLaKey: (c) => `pegá la API key y dale ⏎. Se sacan en ${c}`,
   keyGuardada: (l, id) => `Key de **${l}** guardada. Usala con \`/engine\` → \`${id}\`.`,
   noSePudoGuardar: "No se pudo escribir la key. Revisá los permisos de `~/.packetsmith`.",
+  loginDispositivo: (url, cod) =>
+    `Abrí **${url}** y poné el código **${cod}**.
+
+Acá se espera solo; cuando autorices sigue.`,
+  loginListo: (l) => `Sesión de **${l}** guardada. Ya podés mandar un mensaje.`,
+  loginFallo: (m) => `No se pudo completar el login: ${m}`,
+  sinMedidor: "Este plan no publica un medidor de consumo.",
+  tituloUso: "consumo",
 
   cat: { agente: "agente", apariencia: "apariencia", pt: "packet tracer", utilidad: "utilidad" },
   cmd: {
     "model.list": { title: "/model", desc: "cambiar de modelo sin perder la conversación" },
     "effort.list": { title: "/effort", desc: "cuánto razona antes de contestar" },
-    "engine.list": { title: "/engine", desc: "qué CLI de agente corre por debajo" },
+    "engine.list": { title: "/engine", desc: "quién contesta: ~150 proveedores" },
     "session.clear": { title: "/clear", desc: "empezar de cero: borra la conversación y el panel" },
     "theme.list": { title: "/theme", desc: "cambiar la paleta, con vista previa" },
     "theme.effects": { title: "/effects", desc: "scanlines y viñeta de monitor CRT" },
     "app.language": { title: "/language", desc: "idioma de la interfaz y de las respuestas" },
-    "app.connect": { title: "/connect", desc: "poner la API key de un proveedor" },
+    "app.connect": { title: "/connect", desc: "elegir proveedor y plan, y conectarlo" },
     "pt.topology": { title: "/topology", desc: "releer la topología y repoblar el panel" },
     "pt.bridge": { title: "/bridge", desc: "comprobar el puente con Packet Tracer" },
     "app.help": { title: "/help", desc: "qué comandos hay" },
     "app.mcp": { title: "/mcp", desc: "si el MCP de Packet Tracer está registrado" },
     "app.debug": { title: "/debug", desc: "sesión, binario, modelo y esfuerzo en curso" },
+    "app.usage": { title: "/usage", desc: "cuánto va consumido del plan" },
     "app.copy": { title: "/copy", desc: "copiar la última respuesta al portapapeles" },
     "app.export": { title: "/export", desc: "guardar la conversación y la topología" },
     "app.exit": { title: "/exit", desc: "salir" },
@@ -273,7 +299,7 @@ const en: Textos = {
   describiLaRed: "describe the network you want  ·  / for commands",
 
   nadaCoincide: "  no matches",
-  ayudaTeclas: "←→ ⇅ ⏎ esc ",
+  ayudaTeclas: "⇅ move · ←→ group · ⏎ pick · esc ",
   tituloComandos: "commands",
   tituloTema: "theme",
   tituloModelo: "model",
@@ -281,26 +307,39 @@ const en: Textos = {
   tituloMotor: "engine",
   tituloIdioma: "language",
   tituloProveedor: "provider",
+  tituloPlan: "plan",
+  nPlanes: (n) => `${n} plans`,
+  grupoConectados: "connected",
+  grupoCli: "via CLI",
+  grupoDestacados: "featured",
+  grupoTodos: "all",
   conectado: "connected",
   pegaLaKey: (c) => `paste the API key and hit ⏎. Get one at ${c}`,
   keyGuardada: (l, id) => `**${l}** key saved. Use it with \`/engine\` → \`${id}\`.`,
   noSePudoGuardar: "Could not write the key. Check the permissions on `~/.packetsmith`.",
+  loginDispositivo: (url, cod) =>
+    `Open **${url}** and enter the code **${cod}**.\n\nJust wait here; it continues once you authorize.`,
+  loginListo: (l) => `**${l}** session saved. You can send a message now.`,
+  loginFallo: (m) => `Could not finish the login: ${m}`,
+  sinMedidor: "This plan does not publish a usage meter.",
+  tituloUso: "usage",
 
   cat: { agente: "agent", apariencia: "appearance", pt: "packet tracer", utilidad: "utility" },
   cmd: {
     "model.list": { title: "/model", desc: "switch model without losing the conversation" },
     "effort.list": { title: "/effort", desc: "how hard it thinks before answering" },
-    "engine.list": { title: "/engine", desc: "which agent CLI runs underneath" },
+    "engine.list": { title: "/engine", desc: "who answers: ~150 providers" },
     "session.clear": { title: "/clear", desc: "start over: clears the conversation and the panel" },
     "theme.list": { title: "/theme", desc: "switch palette, with live preview" },
     "theme.effects": { title: "/effects", desc: "CRT scanlines and vignette" },
     "app.language": { title: "/language", desc: "interface and reply language" },
-    "app.connect": { title: "/connect", desc: "set a provider's API key" },
+    "app.connect": { title: "/connect", desc: "pick a provider and plan, and connect it" },
     "pt.topology": { title: "/topology", desc: "re-read the topology and refill the panel" },
     "pt.bridge": { title: "/bridge", desc: "check the bridge to Packet Tracer" },
     "app.help": { title: "/help", desc: "what commands there are" },
     "app.mcp": { title: "/mcp", desc: "whether the Packet Tracer MCP is registered" },
     "app.debug": { title: "/debug", desc: "session, binary, model and effort in use" },
+    "app.usage": { title: "/usage", desc: "how much of the plan is used up" },
     "app.copy": { title: "/copy", desc: "copy the last reply to the clipboard" },
     "app.export": { title: "/export", desc: "save the conversation and the topology" },
     "app.exit": { title: "/exit", desc: "quit" },

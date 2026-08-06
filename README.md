@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OpenTUI](https://img.shields.io/badge/OpenTUI-Solid-4051B5?style=flat-square)](https://github.com/sst/opentui)
 [![MCP](https://img.shields.io/badge/protocol-MCP-00B4D8?style=flat-square)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-262%20passing-3fb950?style=flat-square)](test/)
+[![Tests](https://img.shields.io/badge/tests-346%20passing-3fb950?style=flat-square)](test/)
 [![License](https://img.shields.io/github/license/Mats2208/packetsmith?style=flat-square&color=green)](LICENSE)
 
 <br/>
@@ -20,7 +20,7 @@
 <td align="center"><strong>Live topology</strong><br/><sub>tree + canvas plan</sub></td>
 <td align="center"><strong>Real verification</strong><br/><sub>pings, not promises</sub></td>
 <td align="center"><strong>Plan + context meters</strong><br/><sub>know what you're burning</sub></td>
-<td align="center"><strong>262 tests</strong><br/><sub>UI included</sub></td>
+<td align="center"><strong>346 tests</strong><br/><sub>UI included</sub></td>
 </tr>
 </table>
 
@@ -56,7 +56,7 @@
 
 ## What it is
 
-PacketSmith **does not implement an agent**. It wraps one you already have — [Claude Code](https://claude.com/claude-code) today, Codex and OpenCode next — and gives it an interface built for network labs instead of for editing files.
+PacketSmith is an agent with an interface built for network labs instead of for editing files. It runs its **own loop** against the provider you pick — Kimi, OpenAI, DeepSeek, Z.AI, Groq, OpenRouter — or drives the [Claude Code](https://claude.com/claude-code) CLI, which is the only way to spend a Pro/Max subscription.
 
 | | | |
 |---|---|---|
@@ -68,21 +68,28 @@ PacketSmith **does not implement an agent**. It wraps one you already have — [
 | **Budget** | context window and plan quota | `CTX ██░░░░░░ 18% · 5H ███░░░░░ 23%` |
 | **Timing** | where a turn actually went | `⏱ 2m40s · 34s en packet tracer (21%) · 2m06s en el modelo` |
 | **Commands** | everything you can pick, behind `/` | `/model` `/effort` `/theme` `/topology` `/export` |
+| **Header** | who answers, with what, how hard | `PROVIDER KIMI/CODING · MODEL K3 · EFFORT HIGH` |
 
 ## Commands
 
 Press <kbd>/</kbd> on an empty prompt — or <kbd>Ctrl</kbd>+<kbd>P</kbd> at any time — and
-filter as you type. Nothing here needs a restart.
+filter as you type. <kbd>⇅</kbd> walks options, <kbd>←→</kbd> jumps between groups, and
+every row carries its own description so you can compare without moving. Nothing here needs
+a restart.
 
 | | |
 |---|---|
-| `/model` `/effort` | switch model or reasoning effort **without losing the conversation** — the process relaunches on the same session id |
+| `/engine` `/connect` | pick **who** answers and on **which plan** — ~150 providers from [models.dev](https://models.dev), grouped so the ones you already connected come first. Keys land in `~/.packetsmith/auth.json`, mode `0600`, and are never printed |
+| `/usage` | how much of the plan is used up — the same gauge the status bar draws |
+| `/model` `/effort` | switch model or reasoning effort **without losing the conversation** — on the CLI engine the process relaunches on the same session id; on the others the history was ours to begin with |
 | `/theme` | 13 palettes, previewed live as you scroll, reverted if you press Esc |
 | `/effects` | CRT scanlines and vignette, off by default |
 | `/topology` `/bridge` | re-read Packet Tracer, check the bridge |
-| `/copy` `/export` `/debug` `/mcp` `/clear` `/help` | the rest |
+| `/copy` `/export` `/debug` `/mcp` `/language` `/clear` `/help` | the rest |
 
-What you pick with `/theme`, `/model` and `/effort` is remembered in `~/.packetsmith/config.json`.
+What you pick is remembered in `~/.packetsmith/config.json` — including the model **per
+engine**, because `opus` does not exist on Kimi. Full list in
+[`docs/commands.md`](docs/commands.md).
 
 ### Contrast is a test, not a promise
 
@@ -114,11 +121,13 @@ The plan is drawn only when the **layout changed** — moving one device counts.
 
 ## Status: alpha
 
-Working today: the streaming engine, the split-screen TUI, the fabric tree and canvas plan, the activity and budget meters, and per-turn timing. Not there yet: Codex/OpenCode adapters, multi-session, packaging.
+Working today: both engine classes (the `claude` CLI and our own agent loop against ~150 HTTP providers, six of them curated with their plans), three wire protocols, live model lists, per-plan usage meters, the command palette, 13 themes, the split-screen TUI, the fabric tree and canvas plan, and per-turn timing. Not there yet: multi-session, packaging.
 
 ## Install
 
-You need [**Bun**](https://bun.sh) ≥ 1.3 and an authenticated [**`claude`**](https://claude.com/claude-code) CLI. Bun is not optional — OpenTUI will not run on Node.
+You need [**Bun**](https://bun.sh) ≥ 1.3. Bun is not optional — OpenTUI will not run on Node.
+
+For the agent itself, either an authenticated [**`claude`**](https://claude.com/claude-code) CLI, or any plan in `/connect` — a coding subscription (Kimi Code, GLM Coding Plan, ChatGPT Plus/Pro) or a metered API key.
 
 ```bash
 git clone https://github.com/Mats2208/packetsmith
@@ -173,24 +182,51 @@ Wrong question — **PacketSmith runs the MCP underneath.** You need it either w
 | Topology | you read it out of the tool output | fabric tree and canvas plan, drawn for you |
 | Turn cost | whatever your client shows | context, plan quota, and where the time went |
 | Tools loaded | every MCP server you have configured | Packet Tracer only — measurably faster to start |
-| Engine | your client decides | Claude *(Codex / OpenCode coming)* |
+| Engine | your client decides | Claude, or ~150 providers with `/connect` |
 
 **If you already live in Claude Code, the MCP alone is all you need.** PacketSmith is for when you want the topology in front of you instead of buried in a scrollback.
 
 ## How it works
 
+Two kinds of engine, and the difference is where the agent loop lives.
+
 ```
-PacketSmith ──spawn──> claude --output-format stream-json
-                          │  (NDJSON, event by event)
-                          ├──> left panel:  text · tool badges · canvas plan
-                          └──> right panel: pt_* results → fabric + devices
-                                 │
-                          claude ──stdio──> MCP-Packet-Tracer ──HTTP:54321──> Packet Tracer
+ /engine claude — wraps an agent that already exists
+   PacketSmith ──spawn──> claude --output-format stream-json
+                             └──> claude ──stdio──> MCP ──HTTP:54321──> Packet Tracer
+
+ /engine kimi · openai · deepseek … — IS the agent
+   PacketSmith ──HTTPS──> provider
+        └──loop──> MCP ──stdio──> ──HTTP:54321──> Packet Tracer
+
+              ├──> left panel:  text · tool badges · canvas plan
+              └──> right panel: pt_* results → fabric + devices
 ```
 
-**The TUI never talks to the MCP.** That bridge port only fits one process; opening our own client would spawn a second server and the two would fight over it. Everything the panel needs already arrives in the agent's stream.
+The CLI engine exists for one reason: **a Claude Pro/Max subscription has no API**, so the
+only way to spend it is to drive the CLI. Everything else talks HTTP directly, which buys a
+system prompt that is ours and a loop you can read.
 
-Every engine translates its own output into a single `AgentEvent` union, so the UI never knows which one is running. Adding an engine is one file plus one line — see **[AGENTS.md](AGENTS.md)**.
+**Nothing that changes is written down here.** The MCP server is asked what it can do — its
+61 tools arrive with their JSON Schema attached, and tool 62 shows up on its own. The model
+lists come from [models.dev](https://models.dev), cached and refreshed in the background,
+because a list typed into the source is stale the week after you type it.
+
+A provider is not an endpoint. **Kimi is one provider with two plans** — the Code
+subscription and the metered Open Platform — and each plan brings its own URL, protocol,
+models, price and login. Listing them as two providers, which is what this did at first,
+is the kind of small lie that makes you paste the wrong key and get a 401.
+
+The same catalog gives us the **other ~145 providers** for free: anything models.dev
+documents with a base URL, env vars, a tool-calling model and a protocol we speak shows up
+in `/engine` without a line of code per provider.
+
+Every engine emits the same `AgentEvent` union, so the UI never knows which one is running.
+
+**Full documentation lives in [`docs/`](docs/)** — [getting started](docs/getting-started.md),
+[providers and plans](docs/providers.md), [commands](docs/commands.md),
+[architecture](docs/architecture.md), [themes](docs/themes.md),
+[troubleshooting](docs/troubleshooting.md).
 
 ### Measured, not assumed
 
@@ -205,7 +241,7 @@ Every `pt_*` call is one HTTP round-trip to Packet Tracer, strictly serial — `
 ## Development
 
 ```bash
-bun test          # 262 tests — engine, topology and rendered UI frames
+bun test          # 346 tests — engine, protocols, topology and rendered UI frames
 bun run typecheck
 bun run preview   # print the UI in fixed states, without an agent or Packet Tracer
 bun run shots     # regenerate the README screenshots from the source

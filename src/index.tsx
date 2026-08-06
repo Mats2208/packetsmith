@@ -48,7 +48,9 @@ Whatever you pick with /theme, /model, /effort and /language is remembered.
 const cfg = loadConfig()
 
 const engine = getEngine(flag("engine") ?? process.env.PACKETSMITH_ENGINE ?? cfg.engine ?? "claude")
-const model = flag("model") ?? process.env.PACKETSMITH_MODEL ?? cfg.model
+// El modelo se busca POR MOTOR: los alias de Claude no existen en Kimi, así que
+// arrastrar el último elegido entre motores pedía un modelo inexistente.
+const model = flag("model") ?? process.env.PACKETSMITH_MODEL ?? cfg.models?.[engine.name]
 
 const nivel = flag("effort") ?? process.env.PACKETSMITH_EFFORT ?? cfg.effort
 const effort = (EFFORTS as readonly string[]).includes(nivel ?? "")

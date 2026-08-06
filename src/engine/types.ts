@@ -1,3 +1,5 @@
+import type { Medida } from "./providers/usage.ts"
+
 // Contrato común a todos los motores. Un adapter traduce lo que emite SU CLI a
 // este union; de ahí para arriba nadie sabe si corre claude, codex u opencode.
 
@@ -133,4 +135,28 @@ export interface Engine {
    * ofrecer algo que va a fallar.
    */
   models?(): { value: string; description?: string }[]
+  /**
+   * Si el motor NO cobra por token.
+   *
+   * Los planes de suscripción —Kimi Code, y el CLI de Claude contra un Max— no
+   * tienen precio por millón, así que el contador de la barra marcaría
+   * `$0.0000` para siempre. Un cero permanente no es "gratis": es un contador
+   * que parece roto, y esconderlo dice la verdad mejor que mostrarlo.
+   */
+  sinCostoPorToken?: boolean
+  /**
+   * Cuánto va consumido del plan, si el proveedor publica un medidor.
+   *
+   * Con el CLI de Claude esto salía de un endpoint de Anthropic. Con un plan
+   * propio lo dice cada proveedor a su manera, y el motor lo normaliza: la
+   * barra dibuja lo mismo sin saber con quién está hablando.
+   */
+  uso?(): Promise<Medida | undefined>
+  /**
+   * Qué plan usa ahora mismo, para la cabecera.
+   *
+   * Un proveedor puede tener varias puertas con precios distintos; decir solo
+   * su nombre esconde por cuál entraste.
+   */
+  planActual?(): string | undefined
 }

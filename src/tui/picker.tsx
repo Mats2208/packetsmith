@@ -1,13 +1,24 @@
-// La paleta de comandos, como tablero.
+// La paleta de comandos.
 //
-// No es una lista con scroll y un filtro: es una grilla donde los catorce
-// comandos están a la vista, agrupados por familia. Un buscador difuso resuelve
-// bien el caso "sé cómo se llama y lo quiero ya", y resuelve mal el que importa
-// más al principio: "no sé qué puedo pedirle a esto". Con pocos comandos, el
-// repertorio completo delante es mejor interfaz que una caja de texto.
+// Fue un tablero —todos los comandos a la vista, agrupados por familia, en dos
+// renglones— y era lindo de ver y molesto de usar. Con un tablero, ←→ es "el de
+// al lado" y ⇅ es "otra familia", así que moverse entre dos opciones que se
+// leen juntas podía costar un salto de familia y volver. La mano espera que ⇅
+// recorra opciones, no categorías.
 //
-// Se dibuja a mano en vez de usar el `<select>` de OpenTUI porque `<select>` es
-// una lista vertical de un solo color por fila, o sea lo contrario de esto.
+// Ahora es una LISTA, pero no una lista pelada:
+//
+//   · una fila por opción, con su descripción al lado — antes solo se veía la
+//     de donde estabas parado, así que comparar dos era ir y venir;
+//   · encabezado de familia donde cambia, que da el mismo agrupamiento que
+//     daba el tablero sin costar la navegación;
+//   · ventana con desplazamiento y un contador `3/16`, porque con models.dev
+//     hay listas de cuarenta modelos y el tablero directamente no entraba;
+//   · el filtro tipeado a la vista arriba, no escondido en un rincón.
+//
+// Se dibuja a mano en vez de usar el `<select>` de OpenTUI porque hace falta el
+// encabezado de familia intercalado y dos colores por fila, y `<select>` da una
+// fila plana de un color.
 //
 // Lo que sí se aprovecha del teclado global: mientras hay un diálogo abierto,
 // TODAS las teclas se atienden acá y se marcan como consumidas. El campo de
@@ -205,98 +216,53 @@ export function filtrar(opciones: Opcion[], consulta: string): Opcion[] {
 // paneles es alto que le devolvés a la conversación.
 
 /**
- * Espacio ENTRE opciones, fuera del resaltado.
+ * Cuántas filas de lista se muestran a la vez.
  *
- * Va separado del relleno interno a propósito. Cuando todo era una sola cadena
- * —`●título` más dos espacios, todo con el fondo del resaltado— pasaban dos
- * cosas feas: el recuadro del elegido quedaba con un espacio a la izquierda y
- * dos a la derecha, y el punto del que está en uso se comía el relleno
- * izquierdo, así que `●ice` salía pegado al recuadro anterior.
- *
- * Ahora el hueco es de la fila, no de la opción, y el punto vive en el hueco.
+ * Es una ventana y no la lista entera porque la app está partida en dos paneles
+ * y el alto es caro: `/model` con models.dev puede traer cuarenta modelos, y
+ * cuarenta filas taparían la conversación entera. Ocho deja ver el contexto de
+ * arriba y abajo del cursor sin comerse la pantalla.
  */
-const HUECO = 1
+export const VENTANA = 8
 
-/** Relleno adentro del resaltado, a cada lado del nombre. */
-const RELLENO = 1
+/** Ancho de la columna de títulos. El resto es para la descripción. */
+export const COL_TITULO = 14
+
+export type Entrada =
+  /** Encabezado de familia. No se puede elegir ni cuenta para el cursor. */
+  | { tipo: "familia"; texto: string }
+  /** Una opción. `i` es su índice en la lista filtrada. */
+  | { tipo: "opcion"; i: number }
 
 /**
- * Cuánto mide la columna de familias.
+ * Qué filas se dibujan, ya desplazadas para que el cursor se vea.
  *
- * Cero cuando no hay: los diálogos de tema, modelo y esfuerzo no tienen
- * familias, y dejarle quince columnas a una etiqueta que no existe es regalar
- * el espacio donde entrarían dos opciones más.
+ * Es puro y exportado porque acá vive lo que se puede romper sin que se note:
+ * un desplazamiento mal calculado deja el cursor fuera de la ventana y la lista
+ * parece trabada. Con esto se prueba sin montar nada.
  */
-export function anchoFamilia(opciones: Opcion[]): number {
-  if (!opciones.some((o) => o.category)) return 1
-  const masLarga = Math.max(0, ...opciones.map((o) => (o.category ?? "").length))
-  return Math.min(16, masLarga + 2)
-}
+export function listado(opciones: Opcion[], cursor: number, alto = VENTANA): Entrada[] {
+  // Primero la lista completa, con los encabezados donde cambia la familia.
+  const todo: Entrada[] = []
+  let ultima: string | undefined
+  opciones.forEach((o, i) => {
+    const fam = o.category ?? ""
+    if (fam && fam !== ultima) todo.push({ tipo: "familia", texto: fam })
+    ultima = fam
+    todo.push({ tipo: "opcion", i })
+  })
+  if (todo.length <= alto) return todo
 
-/**
- * Cuánto ocupa una opción dibujada: el punto de "en uso", el nombre, y el hueco.
- *
- * Las celdas se empaquetan según su contenido en vez de alinearse todas a la
- * más larga. Alineado, `/mcp` arrastraba ocho espacios detrás solo porque en
- * otro renglón existe `/topology`, y el tablero quedaba desparramado: mucho
- * aire entre cosas que se leen juntas. Empaquetado, cada renglón ocupa lo que
- * pesa. Se pierde la columna a plomo entre renglones distintos, y no importa —
- * lo que agrupa acá es la familia, no la columna.
- */
-export const anchoOpcion = (o: Opcion) => HUECO + RELLENO + o.title.length + RELLENO
-
-/** Cuántas opciones entran en un renglón, a partir de la primera. */
-export function cuantasEntran(opciones: Opcion[], desde: number, disponible: number): number {
-  let usado = 0
-  let n = 0
-  for (let i = desde; i < opciones.length; i++) {
-    const w = anchoOpcion(opciones[i]!)
-    if (n > 0 && usado + w > disponible) break
-    usado += w
-    n++
-  }
-  return Math.max(1, n)
-}
-
-export interface Fila {
-  /** Vacío en los renglones de continuación de una familia larga. */
-  familia: string
-  /** Índices dentro de la lista filtrada, para que el cursor sea uno solo. */
-  indices: number[]
-}
-
-/**
- * Arma los renglones: una familia por renglón, partida en varios si no entra.
- *
- * Se calcula acá y no se deja a `flexWrap` a propósito. Un renglón que envuelve
- * tiene alto variable, y una caja de alto variable sin declararlo es la trampa
- * de OpenTUI que ya está anotada dos veces en AGENTS.md: el bloque de abajo le
- * pisa la última fila. Partiendo a mano, cada renglón declara `height: 1` y no
- * hay nada que adivinar.
- */
-export function filas(opciones: Opcion[], ancho: number): Fila[] {
-  const disponible = Math.max(10, ancho - anchoFamilia(opciones) - 4)
-  const out: Fila[] = []
-  let i = 0
-
-  while (i < opciones.length) {
-    const familia = opciones[i]!.category ?? ""
-    // Una familia por renglón: se corta donde cambia.
-    let hasta = i
-    while (hasta < opciones.length && (opciones[hasta]!.category ?? "") === familia) hasta++
-
-    let primero = true
-    while (i < hasta) {
-      const n = Math.min(cuantasEntran(opciones, i, disponible), hasta - i)
-      // Solo el primer renglón de una familia lleva su nombre: repetirlo en la
-      // continuación haría parecer que son dos familias distintas.
-      out.push({ familia: primero ? familia : "", indices: [...Array(n)].map((_, k) => i + k) })
-      i += n
-      primero = false
-    }
-  }
-
-  return out
+  // El cursor se mantiene DENTRO de la ventana con un margen: pegarlo al borde
+  // hace que no se vea qué viene, que es justo lo que uno mira antes de moverse.
+  const fila = todo.findIndex((e) => e.tipo === "opcion" && e.i === cursor)
+  const margen = 2
+  let desde = Math.min(Math.max(0, fila - margen), todo.length - alto)
+  desde = Math.max(0, Math.min(desde, todo.length - alto))
+  // Un encabezado suelto arriba de todo no dice de qué grupo es lo que sigue si
+  // se cortó justo debajo; empezar una fila antes lo recupera.
+  if (desde > 0 && todo[desde]?.tipo === "opcion" && todo[desde - 1]?.tipo === "familia") desde--
+  return todo.slice(desde, desde + alto)
 }
 
 export function Picker(props: {
@@ -307,14 +273,19 @@ export function Picker(props: {
 }) {
   const activo = dialogoActivo
   const visibles = createMemo(() => (activo() ? filtrar(activo()!.opciones, filtro()) : []))
-  // El ancho de la etiqueta sale del diálogo entero y no de lo filtrado: si
-  // cambiara con cada tecla, el tablero se movería solo mientras escribís.
-  const colFamilia = createMemo(() => anchoFamilia(activo()?.opciones ?? []))
+  const entradas = createMemo(() => listado(visibles(), cursor()))
+  /** Cuánto le queda a la descripción después del título y los márgenes. */
+  const anchoDesc = () => Math.max(8, props.ancho() - COL_TITULO - 10)
 
   const mover = (delta: number) => {
     const lista = visibles()
     if (!lista.length) return
-    const siguiente = (cursor() + delta + lista.length) % lista.length
+    // De a uno da la vuelta —bajar en la última lleva a la primera, que es lo
+    // que la mano espera—; de a una página se topa con el borde, porque dar la
+    // vuelta entera al apretar PgDn desorienta.
+    const siguiente = Math.abs(delta) === 1
+      ? (cursor() + delta + lista.length) % lista.length
+      : Math.max(0, Math.min(lista.length - 1, cursor() + delta))
     setCursor(siguiente)
     activo()?.onMover?.(lista[siguiente]!)
   }
@@ -382,13 +353,23 @@ export function Picker(props: {
 
     switch (k.name) {
       case "escape": dialog.cerrar(true); return
-      // En un tablero, ←→ es "el de al lado" y ⇅ es "la familia de arriba o de
-      // abajo". Cuando hay una sola familia —los diálogos de tema, modelo o
-      // esfuerzo— ⇅ vuelve a ser ±1, que es lo que la mano espera ahí.
-      case "left": mover(-1); return
-      case "right": mover(1); return
-      case "up": saltarFamilia(-1); return
-      case "down": saltarFamilia(1); return
+      // En una lista, ⇅ es "la de arriba o la de abajo" y nada más. Era al revés
+      // cuando esto era un tablero, y ese cruce es lo que lo hacía incómodo.
+      case "up": mover(-1); return
+      case "down": mover(1); return
+      // ←→ salta de familia, que es el atajo que el tablero daba gratis. Sin
+      // familias no hay nada que saltar y vuelve a ser ±1.
+      case "left": saltarFamilia(-1); return
+      case "right": saltarFamilia(1); return
+      // Página entera, para listas largas de verdad — cuarenta modelos.
+      case "pageup": mover(-VENTANA); return
+      case "pagedown": mover(VENTANA); return
+      case "home": setCursor(0); activo()?.onMover?.(visibles()[0]!); return
+      case "end": {
+        const ultimo = visibles().length - 1
+        if (ultimo >= 0) { setCursor(ultimo); activo()?.onMover?.(visibles()[ultimo]!) }
+        return
+      }
       case "return":
       case "kpenter": elegir(); return
       case "tab": {
@@ -415,10 +396,22 @@ export function Picker(props: {
   // Una API key se PEGA. El pegado llega como un evento propio y no como una
   // ráfaga de teclas, así que sin esto el diálogo de escribir quedaba vacío.
   usePaste((ev: PasteEvent) => {
-    if (!activo()?.escribir) return
-    // El pegado llega como bytes crudos, no como texto: hay que decodificarlo.
-    // Y se le sacan espacios y saltos, porque una key copiada de una web suele
-    // venir con un salto al final y eso ya no es la misma cadena.
+    if (!hayDialogo()) return
+    // Se consume SIEMPRE que haya un diálogo abierto, escriba o no.
+    //
+    // Sin esto el pegado llegaba a los dos lados: la key entraba en el diálogo
+    // y ADEMÁS quedaba escrita en el campo del mensaje, a la vista y lista para
+    // mandarse al agente sin querer. Es el mismo motivo por el que las teclas
+    // se consumen con un diálogo abierto, y se me había escapado justo en el
+    // caso donde el dato es secreto.
+    ev.preventDefault()
+    ev.stopPropagation()
+
+    const esc = activo()?.escribir
+    if (!esc) return
+    // Llega como bytes crudos, no como texto. Y se le sacan espacios y saltos,
+    // porque una key copiada de una web suele venir con un salto al final y eso
+    // ya no es la misma cadena.
     const texto = new TextDecoder().decode(ev.bytes).replace(/\s+/g, "")
     if (texto) setFiltro((f) => f + texto)
   })
@@ -461,6 +454,25 @@ export function Picker(props: {
           </box>
         </Show>
 
+        {/* La línea de filtro va ARRIBA y siempre visible. Antes vivía abajo a
+            la derecha y solo aparecía si habías tipeado algo, así que mientras
+            buscabas no se veía qué estabas buscando. */}
+        <Show when={!activo()!.escribir}>
+          <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>
+            <text style={{ fg: C.brand, flexShrink: 0 }}>{"  › "}</text>
+            <text style={{ fg: C.fg, flexShrink: 0 }}>
+              {`${activo()!.prefijo ?? ""}${filtro()}`}
+            </text>
+            <text style={{ fg: C.brand, flexShrink: 0 }}>{"█"}</text>
+            <box style={{ flexGrow: 1 }} />
+            {/* Cuántas hay y en cuál estás. Con una ventana con scroll, sin
+                esto no hay forma de saber si abajo queda algo. */}
+            <text style={{ fg: C.faint, flexShrink: 0 }}>
+              {visibles().length ? `${cursor() + 1}/${visibles().length}  ` : "  "}
+            </text>
+          </box>
+        </Show>
+
         <Show
           when={!activo()!.escribir && visibles().length}
           fallback={
@@ -471,70 +483,63 @@ export function Picker(props: {
             </Show>
           }
         >
-          {/* `Index` y no `For`: los renglones son POSICIONES, no identidades.
-              Con `For`, cada tecla rehace el arreglo filtrado y sus elementos
-              son objetos nuevos, así que Solid destruía y reinsertaba todas las
-              cajas — y OpenTUI se quejaba en cada pulsación ("Anchor is the
-              same as the node being inserted"). */}
-          <Index each={filas(visibles(), props.ancho())}>
-            {(fila) => (
-              <box style={{ flexDirection: "row", height: 1 }}>
-                {/* La familia va como etiqueta a la izquierda, en tono de
-                    estructura: dice de qué es cada renglón sin gastarle uno. */}
-                <text style={{ fg: C.faint, flexShrink: 0 }}>
-                  {` ${fila().familia.toUpperCase().slice(0, colFamilia() - 1).padEnd(colFamilia())}`}
-                </text>
-                <Index each={fila().indices}>
-                  {(i) => {
+          {/* `Index` y no `For`: las filas son POSICIONES, no identidades. Con
+              `For`, cada tecla rehace el arreglo filtrado y sus elementos son
+              objetos nuevos, así que Solid destruía y reinsertaba todas las
+              cajas — y OpenTUI se quejaba en cada pulsación ("Anchor is the same
+              as the node being inserted"). */}
+          <Index each={entradas()}>
+            {(entrada) => (
+              <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>
+                <Show
+                  when={entrada().tipo === "opcion"}
+                  fallback={
+                    // Encabezado de familia: da el agrupamiento que daba el
+                    // tablero sin costar la navegación.
+                    <text style={{ fg: C.faint, flexShrink: 0 }}>
+                      {`  ${(entrada() as { texto: string }).texto.toUpperCase()}`}
+                    </text>
+                  }
+                >
+                  {(() => {
+                    const i = () => (entrada() as { i: number }).i
                     const o = () => visibles()[i()]!
                     const puesto = () => i() === cursor()
                     return (
                       <>
-                        {/* El hueco es de la FILA, no de la opción, y el punto
-                            del que está en uso vive acá adentro. Así el recuadro
-                            del elegido queda con el mismo relleno de los dos
-                            lados, y un `●` no se come el de la izquierda. */}
+                        {/* La cuña marca dónde estás; el punto, qué está en uso.
+                            Son dos cosas distintas y por eso son dos glifos. */}
                         <text style={{ fg: C.brand, flexShrink: 0 }}>
-                          {o().current ? "●" : " "}
+                          {puesto() ? " ▸ " : o().current ? " ● " : "   "}
                         </text>
                         <text
                           style={{
-                            // El elegido se marca con FONDO. Un tercer color de
-                            // texto sobre un tablero de dos tonos no se
-                            // distinguiría de los otros dos.
                             bg: puesto() ? C.brand : undefined,
                             fg: puesto() ? C.panel : o().current ? C.brand : C.fg,
                             flexShrink: 0,
                           }}
                         >
-                          {`${" ".repeat(RELLENO)}${o().title}${" ".repeat(RELLENO)}`}
+                          {` ${o().title.slice(0, COL_TITULO).padEnd(COL_TITULO)} `}
+                        </text>
+                        {/* La descripción va en TODAS las filas, no solo en la
+                            del cursor: comparar dos opciones era ir y venir. */}
+                        <text style={{ fg: puesto() ? C.dim : C.faint, flexShrink: 0 }}>
+                          {`  ${(o().description ?? "").slice(0, anchoDesc())}`}
                         </text>
                       </>
                     )
-                  }}
-                </Index>
+                  })()}
+                </Show>
               </box>
             )}
           </Index>
         </Show>
 
-        {/* Lo que hace el elegido, en su propio renglón. En un tablero no entra
-            una descripción por celda, y tampoco hace falta: la que importa es
-            la de donde estás parado. */}
         <Show when={!activo()!.escribir}>
-        <box style={{ flexDirection: "row", height: 1 }}>
-          <text style={{ fg: C.dim, flexShrink: 0 }}>
-            {` ${(visibles()[cursor()]?.description ?? "").slice(0, Math.max(0, props.ancho() - 30))}`}
-          </text>
-          <box style={{ flexGrow: 1 }} />
-          {/* El filtro es del diálogo y no del campo de escritura: así se puede
-              buscar sin ensuciar el mensaje que estabas redactando. */}
-          <text style={{ fg: C.faint, flexShrink: 0 }}>
-            {filtro() ? `${activo()!.prefijo ?? ""}${filtro()}` : ""}
-          </text>
-          <text style={{ fg: C.brand, flexShrink: 0 }}>{filtro() ? "█ " : ""}</text>
-          <text style={{ fg: C.faint, flexShrink: 0 }}>{T.ayudaTeclas}</text>
-        </box>
+          <box style={{ flexDirection: "row", height: 1, flexShrink: 0 }}>
+            <box style={{ flexGrow: 1 }} />
+            <text style={{ fg: C.faint, flexShrink: 0 }}>{T.ayudaTeclas}</text>
+          </box>
         </Show>
       </box>
     </Show>
