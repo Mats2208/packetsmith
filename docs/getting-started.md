@@ -11,6 +11,29 @@ plan from any provider in `/connect`. You do not need both.
 
 ## Install
 
+**A compiled binary — nothing else needed.** It carries the Bun runtime inside, so this
+works on a machine with no Bun, no Node and no npm.
+
+```bash
+# macOS, Linux, WSL
+curl -fsSL https://raw.githubusercontent.com/Mats2208/packetsmith/main/scripts/install.sh | sh
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/Mats2208/packetsmith/main/scripts/install.ps1 | iex
+```
+
+**From npm**, if you would rather:
+
+```bash
+npm i -g packetsmith      # or: bun add -g packetsmith
+```
+
+That package has no code of its own — a small Node launcher plus one binary per platform as
+optional dependencies, so npm downloads only the ~100 MB that matches your machine instead
+of all seven.
+
+**From source**, which is what you want if you are going to change it:
+
 ```bash
 git clone https://github.com/Mats2208/packetsmith
 cd packetsmith
@@ -19,7 +42,13 @@ bun run setup
 bun run dev
 ```
 
-`bun run setup` asks before every step. It creates a Python environment under
+Then, once, to install the Packet Tracer MCP:
+
+```bash
+packetsmith setup          # or, from source: bun run setup
+```
+
+`setup` asks before every step. It creates a Python environment under
 `~/.packetsmith`, installs [MCP-Packet-Tracer](https://github.com/Mats2208/MCP-Packet-Tracer)
 from source (it is not on PyPI), registers it with `claude mcp add --scope user`, and
 downloads the `.pts` extension. Run it with `--dry-run` to see the plan without touching

@@ -1,0 +1,94 @@
+# Compila los siete binarios, los cuelga de la release y publica en npm.
+#
+# Corre en Linux y no en Windows a propósito: cross-compilar DESDE Windows falla
+# al extraer el runtime de Bun de otras plataformas ("Failed to extract
+# executable for bun-linux-x64"). Desde Linux salen los siete.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a publicar (ej. v0.3.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      # Lo mismo que exige AGENTS.md antes de decir que algo anda. Si esto falla,
+      # no se publica: una release rota es peor que una release tarde.
+      - run: bun run typecheck
+      - run: bun test
+
+      - run: bun run build
+
+      # Un archivo por plataforma, con el nombre que esperan los instaladores.
+      - name: empaquetar
+        run: |
+          cd dist
+          for d in packetsmith-*/; do
+            nombre="${d%/}"
+            if [ -f "$nombre/bin/packetsmith.exe" ]; then
+              (cd "$nombre/bin" && zip -q "../../$nombre.zip" packetsmith.exe)
+            else
+              tar -czf "$nombre.tar.gz" -C "$nombre/bin" packetsmith
+            fi
+          done
+          ls -la *.tar.gz *.zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  npm:
+    needs: build
+    runs-on: ubuntu-latest
+    # Sin el token no se intenta: fallar acá dejaría la release a medias, con
+    # los binarios colgados y npm sin publicar.
+    if: ${{ vars.PUBLISH_NPM == 'true' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Los de plataforma PRIMERO: el paquete que los referencia como
+      # dependencias opcionales no puede publicarse antes que ellos, o quien
+      # instale en ese hueco se queda sin binario.
+      - name: publicar
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for d in dist/packetsmith-*/; do
+            npm publish "$d" --access public
+          done
+          npm publish dist/packetsmith --access public

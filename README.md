@@ -143,15 +143,34 @@ model. `/copy` puts it on the clipboard. That is the whole bug report.
 
 ## Install
 
-You need [**Bun**](https://bun.sh) ≥ 1.3. Bun is not optional — OpenTUI will not run on Node.
+```bash
+# macOS, Linux, WSL
+curl -fsSL https://raw.githubusercontent.com/Mats2208/packetsmith/main/scripts/install.sh | sh
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/Mats2208/packetsmith/main/scripts/install.ps1 | iex
+
+# or from npm
+npm i -g packetsmith
+bun add -g packetsmith
+```
+
+The binary carries its runtime inside, so **nothing else is needed** — no Bun, no Node, no npm. Then, once:
+
+```bash
+packetsmith setup     # installs the MCP, registers it, fetches the PT extension
+packetsmith
+```
 
 For the agent itself, either an authenticated [**`claude`**](https://claude.com/claude-code) CLI, or any plan in `/connect` — a coding subscription (Kimi Code, GLM Coding Plan, ChatGPT Plus/Pro) or a metered API key.
+
+**From source**, which is what you want if you are going to change it — this one does need [Bun](https://bun.sh) ≥ 1.3, because OpenTUI will not run on Node:
 
 ```bash
 git clone https://github.com/Mats2208/packetsmith
 cd packetsmith
 bun install
-bun run setup     # installs the MCP, registers it, fetches the PT extension
+bun run setup
 bun run dev
 ```
 

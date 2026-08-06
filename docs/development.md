@@ -91,6 +91,32 @@ bun add file:../packetsmith-*.tgz
 bun ./node_modules/packetsmith/src/index.tsx --help
 ```
 
+## Building binaries
+
+```bash
+bun run build            # the seven targets
+bun run build --local    # just this platform, to test quickly
+```
+
+Three things about that script are load-bearing, and each one was a failure first:
+
+**The Solid JSX plugin.** In development the JSX transform comes from a *preload* declared
+in `bunfig.toml`, and preloads do not run when compiling. Without
+`createSolidTransformPlugin()` the binary builds perfectly and then dies at the first
+`<box>` with `Orphan text error` — so `--help` looks fine and the app is broken.
+
+**`bun install --os="*" --cpu="*" @opentui/core`.** OpenTUI draws through a native library,
+one per platform, and a normal install only fetches this machine's. Cross-compiling without
+this fails with `Could not resolve "@opentui/core-linux-x64"`. The quotes matter: Bun's
+shell expands a bare `*` as a glob.
+
+**Cross-compile on Linux, not Windows.** From Windows, Bun cannot extract the other
+platforms' runtimes (`Failed to extract executable for bun-linux-x64`). `--local` works
+everywhere; the full set runs in CI on `ubuntu-latest`.
+
+The release workflow typechecks and tests before building. A broken release is worse than a
+late one.
+
 ## Both platforms, every time
 
 The project is developed on macOS **and** Windows. A change that only ever runs on one is

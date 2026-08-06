@@ -169,10 +169,14 @@ if (existsSync(PTS)) {
   console.log(`  ${c.ok("●")} ${c.t("extensión ya descargada")}`)
 } else if (await confirm("¿Bajo la extensión de Packet Tracer (.pts)?")) {
   if (!DRY) mkdirSync(DEST, { recursive: true })
+  // El tipo va declarado: `r.json()` devuelve `any` en runtime pero `{}` para
+  // el compilador, así que `rel.assets` no existe para él. Sin esto el
+  // typecheck falla — y no fallaba antes solo porque este archivo no estaba en
+  // el grafo de imports de nada que se compilara.
   const rel = await fetch("https://api.github.com/repos/Mats2208/MCP-Packet-Tracer/releases/latest")
-    .then((r) => r.json())
+    .then((r) => r.json() as Promise<{ assets?: { name: string; browser_download_url: string }[] }>)
     .catch(() => null)
-  const asset = rel?.assets?.find((a: any) => String(a.name).endsWith(".pts"))
+  const asset = rel?.assets?.find((a) => String(a.name).endsWith(".pts"))
 
   if (!asset) {
     console.log(c.w(`  ⚠ no encontré el .pts en los releases — bajalo de ${REPO}/releases`))

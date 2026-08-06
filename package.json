@@ -39,6 +39,7 @@
     "tsconfig.json",
     "AGENTS.md",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "publishConfig": {
@@ -47,6 +48,7 @@
   "scripts": {
     "dev": "bun run src/index.tsx",
     "setup": "bun run scripts/setup.ts",
+    "build": "bun run scripts/build.ts",
     "preview": "bun run scripts/preview.tsx",
     "bench": "bun run scripts/bench.tsx",
     "shots": "bun run scripts/shots.tsx",
@@ -55,7 +57,7 @@
     "prepublishOnly": "bun run typecheck && bun test"
   },
   "dependencies": {
-    "@opentui/core": "^0.5.1",
+    "@opentui/core": "0.5.1",
     "@opentui/solid": "^0.5.1",
     "solid-js": "^1.9.14"
   },

@@ -27,6 +27,17 @@ const flag = (name: string) => {
   return v?.startsWith("--") ? undefined : v
 }
 
+// `packetsmith setup` — el instalador, como subcomando.
+//
+// Existe por el binario compilado: quien instala con `npm i -g` o con el script
+// de curl NO tiene el repo, así que `bun run setup` no es una opción para él y
+// se quedaría sin forma de instalar el MCP. Import dinámico para que el
+// instalador solo se cargue cuando se pide.
+if (argv[0] === "setup") {
+  await import("../scripts/setup.ts")
+  process.exit(0)
+}
+
 if (argv.includes("--help") || argv.includes("-h")) {
   // En inglés como el resto de la documentación pública del proyecto. La
   // interfaz sí se traduce —eso es `/language`—, pero el `--help` lo lee quien
@@ -52,6 +63,9 @@ packetsmith — describe a network in plain language, watch it build itself
   ${col("--theme <name>")}${THEMES.map((t) => t.name).join(" · ")}
   ${col("")}                         (env PACKETSMITH_THEME)
   ${col("--help")}this
+
+  ${col("setup")}install the Packet Tracer MCP and the extension
+  ${col("")}--dry-run to see the plan without touching anything
 
 Inside, "/" on an empty prompt opens the command palette; Ctrl+P works anywhere.
 Whatever you pick with /theme, /model, /effort and /language is remembered.
