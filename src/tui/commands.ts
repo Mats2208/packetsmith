@@ -36,6 +36,10 @@ export interface CommandCtx {
   copiar(texto: string): boolean
   /** Escribe la transcripción y la topología a un archivo. Devuelve la ruta. */
   exportar(): string
+  /** Cambia de motor. Empieza limpio: modelo y sesión son del motor viejo. */
+  cambiarMotor(nombre: string): void
+  /** Los modelos del motor EN USO. Los de Claude no existen en Kimi. */
+  modelosDelMotor(): { value: string; description?: string }[]
   idioma: {
     actual(): Lang
     /** Aplica Y guarda: el idioma no se previsualiza. */
@@ -87,7 +91,6 @@ export const textoDe = (c: Command) => T.cmd[c.name] ?? { title: c.name, desc: "
  * siempre a la última versión de esa familia, así que la lista no envejece cada
  * vez que sale un modelo nuevo. `claude --help` los documenta.
  */
-const MODELOS = ["opus", "sonnet", "haiku", "fable"] as const
 
 /** Identidad tipada: deja que TypeScript revise cada opción al construirla. */
 const opcion = (o: Opcion): Opcion => o
@@ -101,13 +104,15 @@ export const COMMANDS: Command[] = [
       const actual = ctx.estado().model
       dialog.abrir({
         titulo: T.tituloModelo,
-        opciones: MODELOS.map((m) => opcion({
-          value: m,
-          title: m,
-          description: T.modelos[m],
-          // El modelo que informa el CLI es el nombre completo
+        // Los modelos los declara el MOTOR: los alias de Claude no existen en
+        // Kimi, y ofrecerlos con Kimi puesto es ofrecer algo que va a fallar.
+        opciones: ctx.modelosDelMotor().map((m) => opcion({
+          value: m.value,
+          title: m.value,
+          description: m.description ?? T.modelos[m.value],
+          // El nombre que informa el CLI de Claude es el completo
           // (`claude-sonnet-5`), así que se compara por inclusión del alias.
-          current: actual.includes(m),
+          current: actual === m.value || actual.includes(m.value),
         })),
         onElegir: (o) => ctx.reiniciar({ model: o.value }),
       })
@@ -137,7 +142,7 @@ export const COMMANDS: Command[] = [
         opciones: motores.map((m) => opcion({ value: m, title: m, current: m === engine })),
         onElegir: (o) => {
           if (o.value === engine) return
-          ctx.decir(T.motorSoloAlArrancar(o.value))
+          ctx.cambiarMotor(o.value)
         },
       })
     },

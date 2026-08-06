@@ -200,13 +200,14 @@ export function App(props: {
   // nadie.
   const [quota, setQuota] = createSignal<Quota | undefined>(props.quota)
   onMount(() => {
-    if (props.quota || props.engine.name !== "claude" || process.env.PACKETSMITH_NO_QUOTA) return
+    if (props.quota || motor().name !== "claude" || process.env.PACKETSMITH_NO_QUOTA) return
     const stop = pollQuota(homedir(), setQuota)
     onCleanup(stop)
   })
 
   // Lo que se le pide al motor. Son señales porque `/model` y `/effort` las
   // cambian en caliente, y la cabecera tiene que reflejarlo enseguida.
+  const [motor, setMotor] = createSignal(props.engine)
   const [modelPedido, setModelPedido] = createSignal(props.model)
   const [effort, setEffort] = createSignal<Effort>(props.effort ?? "medium")
   const [sessionId, setSessionId] = createSignal("")
@@ -259,7 +260,7 @@ export function App(props: {
   function arrancar(resume?: string) {
     session?.close()
     const mia = ++generacion
-    const s = props.engine.start({
+    const s = motor().start({
       model: modelPedido(),
       effort: effort(),
       lang: idioma(),
@@ -430,6 +431,19 @@ export function App(props: {
     },
     // El tema NO se guarda al previsualizar, solo al confirmar: si no, salir
     // con Esc te dejaba guardado el que estabas mirando de paso.
+    cambiarMotor(nombre) {
+      const e = engines[nombre as keyof typeof engines]
+      if (!e || e === motor()) return
+      setMotor(e)
+      // Modelo y sesión son del motor viejo: los alias de Claude no existen en
+      // Kimi, y el id de sesión tampoco. Se empieza limpio.
+      setModelPedido(undefined)
+      setSessionId("")
+      setToolCount(0)
+      arrancar()
+      saveConfig({ engine: nombre })
+    },
+    modelosDelMotor: () => motor().models?.() ?? [],
     idioma: {
       actual: idioma,
       poner(l) {
@@ -455,11 +469,11 @@ export function App(props: {
       },
     },
     estado: () => ({
-      engine: props.engine.name,
+      engine: motor().name,
       model: model(),
       effort: effort(),
       sessionId: sessionId(),
-      motor: props.engine.describe?.() ?? {},
+      motor: motor().describe?.() ?? {},
       mcp: mcpReady,
       bridge: bridgeLive(),
       nodos: topology().devices.length,
@@ -521,7 +535,7 @@ export function App(props: {
             // El nombre es lo único de marca en la cabecera. El resto son
             // datos, y los datos no llevan color de marca.
             { text: "PACKETSMITH", fg: C.brand },
-            { text: props.engine.name.toUpperCase(), fg: C.fg },
+            { text: motor().name.toUpperCase(), fg: C.fg },
             // El motor ya dijo "CLAUDE"; repetirlo en el modelo daba
             // "CLAUDE ▏ CLAUDE-OPUS-5", que ocupa el doble y no dice más.
             { text: model().toUpperCase().replace(/^CLAUDE-/, "") },

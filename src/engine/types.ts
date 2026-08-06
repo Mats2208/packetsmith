@@ -124,4 +124,13 @@ export interface Engine {
    * arrancado. Cada motor sabe qué de lo suyo vale la pena mirar.
    */
   describe?(): Record<string, string>
+  /**
+   * Los modelos que ofrece, para `/model`.
+   *
+   * Los declara el motor y no una lista suelta en la UI porque los alias de
+   * Claude (`opus`, `sonnet`) no tienen nada que ver con los nombres de Kimi
+   * (`kimi-k2-turbo-preview`), y ofrecer los de uno con el otro puesto es
+   * ofrecer algo que va a fallar.
+   */
+  models?(): { value: string; description?: string }[]
 }

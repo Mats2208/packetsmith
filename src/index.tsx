@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { render } from "@opentui/solid"
-import { getEngine } from "./engine/index.ts"
+import { engines, getEngine } from "./engine/index.ts"
 import { EFFORTS, type Effort } from "./engine/types.ts"
 import { App } from "./tui/app.tsx"
 import { loadConfig } from "./config.ts"
@@ -28,7 +28,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
   console.log(`
 packetsmith — describe a network in plain language, watch it build itself
 
-  ${col("--engine <name>")}agent CLI to wrap        (env PACKETSMITH_ENGINE)
+  ${col("--engine <name>")}${Object.keys(engines).join(" · ")}            (env PACKETSMITH_ENGINE)
   ${col("--model <name>")}opus · sonnet · haiku…   (env PACKETSMITH_MODEL)
   ${col("--effort <level>")}${EFFORTS.join(" · ")}
   ${col("")}                         (env PACKETSMITH_EFFORT)
@@ -47,7 +47,7 @@ Whatever you pick with /theme, /model, /effort and /language is remembered.
 // Un flag explícito gana siempre — es lo que uno espera de un flag.
 const cfg = loadConfig()
 
-const engine = getEngine(flag("engine") ?? process.env.PACKETSMITH_ENGINE ?? "claude")
+const engine = getEngine(flag("engine") ?? process.env.PACKETSMITH_ENGINE ?? cfg.engine ?? "claude")
 const model = flag("model") ?? process.env.PACKETSMITH_MODEL ?? cfg.model
 
 const nivel = flag("effort") ?? process.env.PACKETSMITH_EFFORT ?? cfg.effort

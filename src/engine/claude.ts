@@ -256,6 +256,10 @@ function userMessage(text: string): string {
 export const claude: Engine = {
   name: "claude",
 
+  // Alias y no nombres completos: un alias apunta siempre a la última versión
+  // de su familia, así que la lista no envejece con cada modelo nuevo.
+  models: () => ["opus", "sonnet", "haiku", "fable"].map((value) => ({ value })),
+
   describe() {
     const mcp = scopeToPacketTracer(homedir(), process.cwd())
     // El temporal se borra enseguida: acá solo interesa SI se encontró la

@@ -16,6 +16,7 @@ import { findTheme } from "./tui/themes.ts"
 import { LANGS, type Lang } from "./tui/i18n.ts"
 
 export interface Config {
+  engine?: string
   theme?: string
   model?: string
   effort?: Effort
@@ -42,6 +43,7 @@ export function loadConfig(path = CONFIG_PATH): Config {
   const c = crudo as Record<string, unknown>
 
   const out: Config = {}
+  if (typeof c.engine === "string" && c.engine) out.engine = c.engine
   if (typeof c.theme === "string" && findTheme(c.theme)) out.theme = c.theme
   if (typeof c.model === "string" && c.model) out.model = c.model
   if (typeof c.effort === "string" && (EFFORTS as readonly string[]).includes(c.effort)) {
