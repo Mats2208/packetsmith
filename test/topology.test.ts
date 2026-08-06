@@ -1,7 +1,7 @@
 // El fixture reproduce el formato exacto que arma pt_export_topology en
 // tool_registry.py — incluido el enlace inalámbrico, que no tiene extremo B.
 import { expect, test, describe } from "bun:test"
-import { ingest, parseExportTopology, unwrapToolOutput, EMPTY } from "../src/topology/ingest.ts"
+import { ingest, parseExportTopology, parseQueryTopology, unwrapToolOutput, EMPTY } from "../src/topology/ingest.ts"
 import { kindOf, type Kind } from "../src/topology/model.ts"
 import { buildForest, censusOf, groupBySubnet } from "../src/topology/tree.ts"
 
@@ -105,6 +105,85 @@ describe("ingest", () => {
     const loaded = ingest(EMPTY, "mcp__packet-tracer__pt_export_topology", `{"result":${JSON.stringify(EXPORT)}}`)
     const after = ingest(loaded, "mcp__packet-tracer__pt_export_topology", "PT error: timeout")
     expect(after).toBe(loaded)
+  })
+})
+
+// ── Lo que rompió el panel contra Packet Tracer 9.0 de verdad ───────────────
+//
+// Este bloque NO sale de un fixture inventado: es la salida literal de
+// pt_export_topology y pt_query_topology sobre una topología de cuatro equipos
+// creada en PT. Trae las dos cosas que el fixture de arriba no tenía —un nombre
+// con espacios y el pseudo-equipo que PT se agrega solo— y cada una rompía el
+// panel de una forma distinta.
+const EXPORT_REAL = `=== Topology Export: 5 devices, 3 links ===
+
+  R1 [2911] @ (277, 85)
+    GigabitEthernet0/0 [linked]
+  Power Distribution Device0 [Power Distribution Device] @ (3899, 3900)
+  SW1 [2960-24TT] @ (270, 238)
+    GigabitEthernet0/1 [linked]
+  PC1 [PC-PT] @ (177, 382)
+    FastEthernet0 IP=192.168.0.2/255.255.255.0 [linked]
+  PC Ventas [PC-PT] @ (377, 382)
+    FastEthernet0 IP=192.168.0.3/255.255.255.0 [linked]
+
+--- Links ---
+  R1:GigabitEthernet0/0  <-->  SW1:GigabitEthernet0/1
+  SW1:FastEthernet0/2  <-->  PC Ventas:FastEthernet0`
+
+const QUERY_REAL = `DEVICES:5|LINKS:3
+
+  R1                   [2911]  (Vlan1,GigabitEthernet0/0)
+  Power Distribution Device0 [Power Distribution Device]
+  SW1                  [2960-24TT]  (Vlan1,GigabitEthernet0/1)
+  PC1                  [PC-PT]  (FastEthernet0=192.168.0.2/255.255.255.0,Bluetooth)
+  PC Ventas            [PC-PT]  (FastEthernet0=192.168.0.3/255.255.255.0,Bluetooth)`
+
+describe("salida real de PT 9.0", () => {
+  test("un equipo con espacios en el nombre NO desaparece", () => {
+    // "PC Ventas" es un nombre perfectamente legal en Packet Tracer. Con `\\S+`
+    // en el regex, su línea no matcheaba y el equipo se caía del panel.
+    const topo = parseExportTopology(EXPORT_REAL)!
+    expect(topo.devices.map((d) => d.name)).toContain("PC Ventas")
+  })
+
+  test("y no le regala sus puertos al equipo de arriba", () => {
+    // Este era el daño de verdad: la línea del equipo no matcheaba pero la de su
+    // puerto SÍ, así que la interfaz y la IP de "PC Ventas" se le colgaban a
+    // PC1. El panel no escondía un equipo: le atribuía una IP ajena a otro.
+    const topo = parseExportTopology(EXPORT_REAL)!
+    const pc1 = topo.devices.find((d) => d.name === "PC1")!
+    expect(pc1.ports).toHaveLength(1)
+    expect(pc1.ports[0]!.ip).toBe("192.168.0.2/255.255.255.0")
+    expect(topo.devices.find((d) => d.name === "PC Ventas")!.ports[0]!.ip)
+      .toBe("192.168.0.3/255.255.255.0")
+  })
+
+  test("el pseudo-equipo de PT queda afuera", () => {
+    // PT se agrega solo un "Power Distribution Device" en (3899, 3900). No es
+    // parte de la red y está fuera del lienzo útil: incluirlo aplasta el plano
+    // entero contra una esquina y ensucia el censo con un OTROS que nadie puso.
+    for (const topo of [parseExportTopology(EXPORT_REAL)!, parseQueryTopology(QUERY_REAL)!]) {
+      expect(topo.devices.map((d) => d.name)).not.toContain("Power Distribution Device0")
+      expect(topo.devices).toHaveLength(4)
+    }
+  })
+
+  test("los enlaces no quedan apuntando a un equipo que no está en la lista", () => {
+    // Un enlace huérfano no se dibuja pero SÍ se cuenta: el encabezado decía
+    // "3 NODES · 3 LINKS" con un cable que no llegaba a ningún lado.
+    const topo = parseExportTopology(EXPORT_REAL)!
+    const nombres = new Set(topo.devices.map((d) => d.name))
+    for (const l of topo.links) {
+      expect(nombres.has(l.a.device)).toBe(true)
+      if (l.b) expect(nombres.has(l.b.device)).toBe(true)
+    }
+  })
+
+  test("query también lee los nombres con espacios", () => {
+    const topo = parseQueryTopology(QUERY_REAL)!
+    const pc = topo.devices.find((d) => d.name === "PC Ventas")!
+    expect(pc.ports.find((p) => p.name === "FastEthernet0")!.ip).toBe("192.168.0.3/255.255.255.0")
   })
 })
 
@@ -343,5 +422,72 @@ describe("construcción incremental", () => {
   test("una salida que no matchea no rompe el estado", () => {
     const t = ingest(EMPTY, "mcp__packet-tracer__pt_add_device", '{"result":"DUPLICATE: ya existe"}')
     expect(t).toBe(EMPTY)
+  })
+
+  // ── Las tres tools que mutan la topología y el panel ignoraba ──────────────
+  // Las cadenas son las que devuelve tool_registry.py, verificadas contra PT.
+  const r = (s: string) => JSON.stringify({ result: s })
+
+  /** R1 —— SW1 —— PC1, que es lo mínimo para notar cada una de las tres. */
+  const armada = () => {
+    let t = ingest(EMPTY, "mcp__packet-tracer__pt_add_device", created("R1", "2911"))
+    t = ingest(t, "mcp__packet-tracer__pt_add_device", created("SW1", "2960-24TT"))
+    t = ingest(t, "mcp__packet-tracer__pt_add_device", created("PC1", "PC-PT"))
+    t = ingest(t, "mcp__packet-tracer__pt_add_link",
+      r("Link created: R1/GigabitEthernet0/0 <--[straight]--> SW1/GigabitEthernet0/1"))
+    return ingest(t, "mcp__packet-tracer__pt_add_link",
+      r("Link created: SW1/FastEthernet0/1 <--[straight]--> PC1/FastEthernet0"))
+  }
+
+  test("delete_link se lleva el enlace, no un cable fantasma", () => {
+    // PT identifica el enlace por UN extremo: equipo e interfaz. Sin esto el
+    // cable seguía dibujado y contado, y el árbol lo usaba para colgar equipos
+    // de un switch al que ya no estaban conectados.
+    const t = ingest(armada(), "mcp__packet-tracer__pt_delete_link",
+      r("Link on SW1/FastEthernet0/1 deleted."))
+    expect(t.links).toHaveLength(1)
+    expect(t.links[0]).toMatchObject({ a: { device: "R1" } })
+    expect(t.devices).toHaveLength(3)
+  })
+
+  test("delete_link encuentra el enlace por cualquiera de sus dos puntas", () => {
+    const t = ingest(armada(), "mcp__packet-tracer__pt_delete_link",
+      r("Link on PC1/FastEthernet0 deleted."))
+    expect(t.links).toHaveLength(1)
+  })
+
+  test("move_device mueve el equipo, que es lo que el plano existe para mostrar", () => {
+    // `layoutKey` incluye las coordenadas justamente para esto: sin actualizar,
+    // pedir "corré el core a la derecha" no redibujaba nada.
+    const t = ingest(armada(), "mcp__packet-tracer__pt_move_device",
+      r("Device 'R1' moved to (600, 40)."))
+    expect(t.devices.find((d) => d.name === "R1")).toMatchObject({ x: 600, y: 40 })
+    // Los demás quedan donde estaban.
+    expect(t.devices.find((d) => d.name === "SW1")).toMatchObject({ x: 100, y: 200 })
+  })
+
+  test("rename_device arrastra los enlaces con el nombre nuevo", () => {
+    // El nombre es la clave con la que los enlaces referencian equipos: si solo
+    // se renombra el equipo, el árbol queda colgando de un nombre que no existe.
+    const t = ingest(armada(), "mcp__packet-tracer__pt_rename_device",
+      r("Device renamed: 'SW1' → 'SW Ventas'"))
+    expect(t.devices.map((d) => d.name)).toContain("SW Ventas")
+    expect(t.devices.map((d) => d.name)).not.toContain("SW1")
+    const nombres = new Set(t.devices.map((d) => d.name))
+    for (const l of t.links) {
+      expect(nombres.has(l.a.device)).toBe(true)
+      expect(nombres.has(l.b!.device)).toBe(true)
+    }
+  })
+
+  test("un enlace de un equipo con espacios en el nombre se lee entero", () => {
+    // El regex acotaba el nombre a `[^/\\s]+`, así que "PC Ventas" cortaba el
+    // match y el enlace se perdía sin que nadie se enterara.
+    const t = ingest(EMPTY, "mcp__packet-tracer__pt_add_link",
+      r("Link created: SW1/FastEthernet0/2 <--[straight]--> PC Ventas/FastEthernet0"))
+    expect(t.links[0]).toMatchObject({
+      a: { device: "SW1", port: "FastEthernet0/2" },
+      b: { device: "PC Ventas", port: "FastEthernet0" },
+    })
   })
 })

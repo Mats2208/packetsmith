@@ -131,7 +131,9 @@ export function groupBySubnet(topo: Topology): Group[] {
 
   for (const d of topo.devices) {
     const ips = addressesOf(d)
-    // Un equipo con varias IPs (un router) va en la primera: es su LAN.
+    // Un equipo con varias IPs (un router) va con la ÚLTIMA: las interfaces
+    // vienen en el orden en que PT las lista, los enlaces de tránsito primero
+    // y la LAN al final, y la LAN es la que dice de qué segmento es dueño.
     const key = ips.length ? `${subnetOf(ips[ips.length - 1]!)}.0/24` : "sin IP"
     const list = groups.get(key)
     if (list) list.push(d)

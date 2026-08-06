@@ -12,14 +12,35 @@
 import type { Device, Link, Port, Topology } from "./model.ts"
 import { EMPTY } from "./model.ts"
 
-// `  R1 [2911] @ (200, 90)`
-const EXPORT_DEVICE = /^ {2}(\S+) \[([^\]]+)\] @ \((-?\d+), (-?\d+)\)$/
+// `  R1 [2911] @ (200, 90)`, y también `  PC Ventas [PC-PT] @ (377, 382)`.
+//
+// El nombre va con `.+?` y no con `\S+`: en Packet Tracer los nombres con
+// espacios son legales y comunes ("PC Ventas", "SW Piso 2"). Con `\S+` esa
+// línea no matcheaba y el equipo desaparecía del panel —pero su línea de
+// puerto, que sí matchea, se le colgaba al equipo ANTERIOR. O sea que el panel
+// no solo escondía un equipo: le atribuía sus interfaces y sus IPs a otro.
+// Medido contra PT 9.0, no supuesto.
+const EXPORT_DEVICE = /^ {2}(.+?) \[([^\]]+)\] @ \((-?\d+), (-?\d+)\)$/
 const EXPORT_PORT = /^ {4}(.+?)(?: IP=(\S+))?( \[linked\])?$/
 const EXPORT_WIRED = /^ {2}(.+?):(.+?) {2}<--> {2}(.+?):(.+)$/
 const EXPORT_WIRELESS = /^ {2}(.+?):(.+?) {2}\)\)\)/
 
 // `  R1                   [2911]  (Vlan1,Gi0/0=10.0.0.1/255.255.255.252,Gi0/1)`
-const QUERY_DEVICE = /^\s{2,}(\S+)\s+\[([^\]]+)\]\s+\((.*)\)\s*$/
+const QUERY_DEVICE = /^\s{2,}(.+?)\s+\[([^\]]+)\]\s+\((.*)\)\s*$/
+
+/**
+ * Pseudo-equipo que Packet Tracer se agrega solo a cada topología.
+ *
+ * No es parte de la red y vive fuera del lienzo útil —(3899, 3900) contra los
+ * 100-700 de un lab—, así que incluirlo aplastaba el plano entero contra una
+ * esquina: el span pasa a ser 3900 y los equipos reales caen todos en la misma
+ * columna. Además ensucia el censo con un "OTROS: 1" que nadie puso.
+ *
+ * Antes quedaba afuera de casualidad, porque su nombre tiene espacios y el
+ * regex pedía `\S+`. Ahora que los nombres con espacios se aceptan, hay que
+ * excluirlo a propósito.
+ */
+const PT_INTERNO = /^Power Distribution Device/
 
 /**
  * El `content` de un tool_result puede venir como string, como array de
@@ -67,8 +88,12 @@ export function parseExportTopology(text: string): Topology | null {
     if (!inLinks) {
       const dev = EXPORT_DEVICE.exec(line)
       if (dev) {
-        current = { name: dev[1]!, model: dev[2]!, x: Number(dev[3]), y: Number(dev[4]), ports: [] }
-        devices.push(current)
+        // El pseudo-equipo de PT corta la racha igual que uno real: sus puertos
+        // no son de nadie, y menos del equipo de arriba.
+        current = PT_INTERNO.test(dev[1]!)
+          ? undefined
+          : { name: dev[1]!, model: dev[2]!, x: Number(dev[3]), y: Number(dev[4]), ports: [] }
+        if (current) devices.push(current)
         continue
       }
       const port = current && EXPORT_PORT.exec(line)
@@ -76,7 +101,13 @@ export function parseExportTopology(text: string): Topology | null {
         const p: Port = { name: port[1]!.trim(), linked: Boolean(port[3]) }
         if (port[2]) p.ip = port[2]
         current!.ports.push(p)
+        continue
       }
+      // Una línea a dos espacios es un equipo. Si llegó acá es que no se pudo
+      // leer, y entonces el equipo en curso YA NO ES el dueño de los puertos que
+      // vengan: sin este corte, los puertos del equipo ilegible se le suman al
+      // anterior y el panel muestra IPs ajenas como si fueran suyas.
+      if (/^ {2}\S/.test(line)) current = undefined
       continue
     }
 
@@ -109,7 +140,7 @@ export function parseQueryTopology(text: string): Topology | null {
   const devices: Device[] = []
   for (const line of text.split("\n")) {
     const m = QUERY_DEVICE.exec(line)
-    if (!m) continue
+    if (!m || PT_INTERNO.test(m[1]!)) continue
 
     const ports: Port[] = []
     for (const raw of m[3]!.split(",")) {
@@ -182,8 +213,10 @@ export function ingest(current: Topology, toolName: string, output: unknown): To
   // hay algo interesante que mirar— y además borrar equipos no se reflejaría.
   if (/pt_add_link/.test(toolName)) {
     // El nombre del equipo llega hasta el PRIMER '/': un \S+ codicioso se come
-    // medio nombre de puerto (R1/GigabitEthernet0 en vez de R1).
-    const m = /Link created: ([^/\s]+)\/(\S+) <--\[[^\]]*\]--> ([^/\s]+)\/(\S+)/.exec(text)
+    // medio nombre de puerto (R1/GigabitEthernet0 en vez de R1). El espacio SÍ
+    // se admite dentro del nombre —"PC Ventas" es un nombre legal en PT— y por
+    // eso la clase excluye solo la barra.
+    const m = /Link created: ([^/]+)\/(\S+) <--\[[^\]]*\]--> ([^/]+)\/(\S+)/.exec(text)
     if (!m) return current
     return {
       devices: current.devices,
@@ -192,6 +225,58 @@ export function ingest(current: Topology, toolName: string, output: unknown): To
         b: { device: m[3]!, port: m[4]! },
         wireless: false,
       }],
+    }
+  }
+
+  // Se borra POR PUERTO, que es como lo identifica PT: `pt_delete_link` recibe
+  // un equipo y una interfaz, no los dos extremos. Sin esto el enlace seguía
+  // dibujado y contado después de que PT ya lo había cortado — un cable
+  // fantasma es peor que ninguno, porque el árbol lo usa para colgar equipos.
+  if (/pt_delete_link/.test(toolName)) {
+    const m = /Link on ([^/]+)\/(\S+) deleted/.exec(text)
+    if (!m) return current
+    const [, device, port] = m
+    const toca = (e?: { device: string; port: string }) =>
+      e !== undefined && e.device === device && e.port === port
+    return {
+      devices: current.devices,
+      links: current.links.filter((l) => !toca(l.a) && !toca(l.b)),
+    }
+  }
+
+  // Mover un equipo no cambia la red pero SÍ la disposición, y la disposición
+  // es exactamente lo que el plano existe para mostrar: sin esto, pedir "corré
+  // el core a la derecha" no redibujaba nada, porque `layoutKey` seguía viendo
+  // las coordenadas viejas.
+  if (/pt_move_device/.test(toolName)) {
+    const m = /Device '(.+?)' moved to \((-?\d+), (-?\d+)\)/.exec(text)
+    if (!m) return current
+    return {
+      devices: current.devices.map((d) =>
+        d.name === m[1] ? { ...d, x: Number(m[2]), y: Number(m[3]) } : d),
+      links: current.links,
+    }
+  }
+
+  // El nombre es la clave con la que los enlaces referencian a los equipos, así
+  // que renombrar sin arrastrar los enlaces deja el árbol colgando de un nombre
+  // que ya no existe.
+  if (/pt_rename_device/.test(toolName)) {
+    // El separador va como "lo que sea que no es comilla": el MCP manda una
+    // flecha Unicode y no vale la pena que el panel dependa de que ese carácter
+    // sobreviva intacto el viaje por JSON y por el terminal.
+    const m = /Device renamed: '(.+?)' [^']*'(.+?)'/.exec(text)
+    if (!m) return current
+    const [, viejo, nuevo] = m
+    const mover = <T extends { device: string; port: string }>(e: T): T =>
+      e.device === viejo ? { ...e, device: nuevo! } : e
+    return {
+      devices: current.devices.map((d) => (d.name === viejo ? { ...d, name: nuevo! } : d)),
+      links: current.links.map((l) => ({
+        ...l,
+        a: mover(l.a),
+        ...(l.b ? { b: mover(l.b) } : {}),
+      })),
     }
   }
 
