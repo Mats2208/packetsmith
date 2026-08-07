@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.2
+
+The tab. PacketSmith now says its name where you go looking for it, and tells you when it
+has gone stale.
+
+### Added
+
+- **The terminal tab is ours.** `◆ PacketSmith`, with the current phase hung off it while
+  the agent works — what you want to know from *another* tab is whether it finished, so the
+  bare name means "done" without reading it. The title that was there is pushed on the way
+  in and restored on the way out, which is more than the programs that leave theirs behind
+  do.
+- **A heartbeat on the tab icon** (OSC 9;4). Windows Terminal draws it over the tab icon and
+  on the taskbar. It is as close to the icon as a program gets: no terminal lets you set the
+  image itself, only the state. Indeterminate rather than a percentage — nobody knows how
+  far along an agent is.
+- **An icon** (`docs/icon.png`) — the diamond node from the banner, legible at 16px. For a
+  terminal profile, the README, or wherever a square logo is needed.
+- **An update notice.** npm never tells an installed CLI that it went stale, so PacketSmith
+  asks: npm's `dist-tags` once every 12 hours, cached in `~/.packetsmith/version.json`, and
+  the start screen says so with the command that matches how you installed it. It never
+  blocks startup, it fails open — no network means no notice rather than an error — and it
+  **never updates itself**. `PACKETSMITH_NO_UPDATE_CHECK=1` turns it off entirely.
+
+  Whoever is on 0.3.1 will not see that notice: it *is* the code that does the telling. From
+  here on, it works.
+
 ## 0.3.1
 
 Distribution. 0.3.0 could only be run from a clone; this one installs.

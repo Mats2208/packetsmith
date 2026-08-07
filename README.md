@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OpenTUI](https://img.shields.io/badge/OpenTUI-Solid-4051B5?style=flat-square)](https://github.com/sst/opentui)
 [![MCP](https://img.shields.io/badge/protocol-MCP-00B4D8?style=flat-square)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-346%20passing-3fb950?style=flat-square)](test/)
+[![Tests](https://img.shields.io/badge/tests-366%20passing-3fb950?style=flat-square)](test/)
 [![License](https://img.shields.io/github/license/Mats2208/packetsmith?style=flat-square&color=green)](LICENSE)
 
 <br/>
@@ -20,7 +20,7 @@
 <td align="center"><strong>Live topology</strong><br/><sub>tree + canvas plan</sub></td>
 <td align="center"><strong>Real verification</strong><br/><sub>pings, not promises</sub></td>
 <td align="center"><strong>Plan + context meters</strong><br/><sub>know what you're burning</sub></td>
-<td align="center"><strong>346 tests</strong><br/><sub>UI included</sub></td>
+<td align="center"><strong>366 tests</strong><br/><sub>UI included</sub></td>
 </tr>
 </table>
 
@@ -124,7 +124,7 @@ The plan is drawn only when the **layout changed** — moving one device counts.
 **Working:** both engine classes — the `claude` CLI and our own agent loop — three wire
 protocols, ~150 providers with their plans, live model lists, per-plan usage meters, the
 command palette, 13 themes, the split-screen TUI, the fabric tree and canvas plan, per-turn
-timing. 346 tests, and the published package is verified by packing, installing and running
+timing. 366 tests, and the published package is verified by packing, installing and running
 it.
 
 **What "beta" means here**, precisely — this is the honest part:
@@ -297,7 +297,7 @@ Every `pt_*` call is one HTTP round-trip to Packet Tracer, strictly serial — `
 ## Development
 
 ```bash
-bun test          # 346 tests — engine, protocols, topology and rendered UI frames
+bun test          # 366 tests — engine, protocols, topology and rendered UI frames
 bun run typecheck
 bun run preview   # print the UI in fixed states, without an agent or Packet Tracer
 bun run shots     # regenerate the README screenshots from the source
