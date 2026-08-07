@@ -25,6 +25,12 @@ NOTES.local.md
 *.png
 !docs/**/*.png
 
+# Lo que el MCP escribe cuando construye una red: configs, plan y topología de
+# una sesión concreta. Se regenera con cada build y no le sirve a nadie más;
+# `projects/build_2r_2pc` entró de contrabando en un `git add -A` y se quedó
+# tres días adentro del repo.
+projects/
+
 .DS_Store
 *.log
 
