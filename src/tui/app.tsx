@@ -21,6 +21,7 @@ import { Gauge, Hairline, Hud } from "./frame.tsx"
 import { dialog, hayDialogo, Picker, registrarPaleta } from "./picker.tsx"
 import { comandoPorTitulo, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
 import { aplicarEfectos } from "./effects.ts"
+import { limpiarPestana, ponerProgreso, ponerTitulo } from "./titulo.ts"
 import { guardarModelo, modeloDe, saveConfig } from "../config.ts"
 import pkg from "../../package.json" with { type: "json" }
 import { hayCredencial, planElegido, setApiKey, setOauth, setPlan } from "../auth.ts"
@@ -193,6 +194,22 @@ export function App(props: {
     }, BEAT_MS)
     onCleanup(() => clearInterval(id))
   })
+
+  // El título de la pestaña. Se cuelga de la fase porque lo que uno quiere
+  // saber mirando la pestaña desde otra pestaña es si el agente ya terminó.
+  //
+  // `props.columns` lo apaga por la misma razón que apaga el `resize`: el
+  // preview y los tests dibujan a un búfer, y una secuencia de escape escrita
+  // ahí no la ve nadie pero ensucia la terminal de quien corre `bun test`.
+  createEffect(() => {
+    if (props.columns) return
+    const trabajando = phase() !== "idle"
+    ponerTitulo(trabajando ? T.fases[phase()].toLowerCase() : undefined)
+    // El mismo dato por la otra vía: con la ventana minimizada o en otra
+    // pestaña, el título no se lee y el ícono sí.
+    ponerProgreso(trabajando)
+  })
+  onCleanup(limpiarPestana)
 
   // Reloj lento, solo para la cuenta regresiva de la cuota. Sin él el número se
   // congela cuando la sesión queda quieta, que es justo cuando el tiempo pasa.
