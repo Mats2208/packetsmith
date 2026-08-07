@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.3
+
+A distribution bug that had nothing to do with your network, and the version number
+finally being where you look for it.
+
+### Fixed
+
+- **The binary died in any directory whose `bunfig.toml` declared a `preload` it could not
+  resolve** — `error: preload not found "…"`, before a single line of ours ran. A compiled
+  executable reads the *runtime* directory's `bunfig.toml`, not the one it was built from,
+  so this hit anyone running `packetsmith` from inside a Bun project, which is a lot of
+  people, with an error that does not even name PacketSmith. Built with
+  `autoloadBunfig: false`: the binary now behaves the same in every directory, which is the
+  only sane thing for something installed globally and run from wherever.
+
+### Added
+
+- **`--version`.** It did not exist, so the flag fell through to the TUI: whoever wanted to
+  check their version got the whole app and had to quit it. Prints the bare number, so it
+  can go straight into a script.
+- **The header plate shows the exact version** (`REV 0.3.3`), not the family. It was cut at
+  `0.3`, so 0.3.1, 0.3.2 and 0.3.3 looked identical — and between two of those is the binary
+  described above. It is also the number a bug report asks for.
+
+### Removed
+
+- `projects/build_2r_2pc` — configs, plan and topology the MCP wrote while building a
+  network on August 4th, swept into the repo by a stray `git add -A`. Nothing referenced it.
+  The `.gitignore` now covers `projects/`, the same way it already covered screenshots and
+  `.pkt` files.
+
 ## 0.3.2
 
 The tab. PacketSmith now says its name where you go looking for it, and tells you when it
