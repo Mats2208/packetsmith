@@ -31,11 +31,17 @@ import { iniciarLogin } from "../engine/providers/oauth-chatgpt.ts"
 /** Solo las tools del MCP de Packet Tracer alimentan el panel derecho. */
 const PT_TOOL = /(^|__)pt_/
 
-/** Va en la placa de la cabecera. Se sube a mano con cada release. */
-// La versión sale del `package.json` y no de una constante acá: escrita a mano
-// se desincroniza sin que nada falle, y una cabecera que dice una versión
-// distinta de la publicada es peor que no decir ninguna.
-const REV = pkg.version.split(".").slice(0, 2).join(".")
+/** La placa de la cabecera: la versión EXACTA que estás corriendo. */
+// Sale del `package.json` y no de una constante acá: escrita a mano se
+// desincroniza sin que nada falle, y una cabecera que dice una versión distinta
+// de la publicada es peor que no decir ninguna.
+//
+// Va completa y no cortada en `0.3`, que es como estaba. El parche no es un
+// detalle: entre 0.3.2 y 0.3.3 hay un binario que se muere en cualquier carpeta
+// con un `preload` en su bunfig, y la placa decía lo mismo en las dos. Y desde
+// que la portada avisa "salió la 0.3.3", una cabecera que no dice en cuál estás
+// deja la mitad de la frase sin contestar.
+const REV = pkg.version
 
 /**
  * Si el puente con Packet Tracer está vivo, leído del texto que devolvió la tool.

@@ -16,6 +16,7 @@ import { App } from "../src/tui/app.tsx"
 import { dialog } from "../src/tui/picker.tsx"
 import type { AgentEvent, Engine } from "../src/engine/types.ts"
 import type { Medida } from "../src/engine/providers/usage.ts"
+import pkg from "../package.json" with { type: "json" }
 
 afterEach(() => dialog.cerrarTodo())
 
@@ -89,6 +90,18 @@ describe("la cabecera", () => {
     expect(h).toContain("PROVIDER KIMI/CODING")
     expect(h).toContain("MODEL K3")
     expect(h).toContain("EFFORT HIGH")
+  })
+
+  test("la placa dice la versión EXACTA, no la familia", async () => {
+    // Estaba cortada en `0.3`, así que 0.3.1, 0.3.2 y 0.3.3 se veían iguales —
+    // y entre dos de esas hay un binario que se muere en cualquier carpeta con
+    // un preload. Es el número que se pega en un reporte de bug: si la placa
+    // vuelve a redondear, esto tiene que fallar.
+    const s = await montar(motorFalso({ name: "kimi" }))
+    const h = await cabecera(s)
+    expect(h).toContain(`REV ${pkg.version}`)
+    // El parche tiene que estar: `0.3` a secas no alcanza.
+    expect(pkg.version.split(".")).toHaveLength(3)
   })
 
   test("el modelo PEDIDO se muestra aunque el motor no haya dicho el suyo", async () => {

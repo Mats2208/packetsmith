@@ -13,6 +13,7 @@ import { App } from "./tui/app.tsx"
 import { loadConfig } from "./config.ts"
 import { setTheme, THEMES } from "./tui/theme.ts"
 import { LANGS, setIdioma } from "./tui/i18n.ts"
+import { version } from "../package.json" with { type: "json" }
 
 // Flags mínimos, sin librería de args: son cuatro y no justifican una
 // dependencia. Se acepta `--x valor` y `--x=valor`, que es lo que la gente
@@ -35,6 +36,16 @@ const flag = (name: string) => {
 // instalador solo se cargue cuando se pide.
 if (argv[0] === "setup") {
   await import("../scripts/setup.ts")
+  process.exit(0)
+}
+
+// `--version` es lo primero que se pregunta en un reporte de bug y lo último
+// que la gente pone. Hasta acá el flag no existía, así que caía al TUI: quien
+// quería saber en qué versión estaba se comía la app entera y tenía que salir
+// de ella. Sale el número pelado, sin nombre ni adornos, para que se pueda
+// meter en un script sin recortarlo.
+if (argv.includes("--version") || argv.includes("-v")) {
+  console.log(version)
   process.exit(0)
 }
 
@@ -62,6 +73,7 @@ packetsmith — describe a network in plain language, watch it build itself
   ${col("--language <code>")}${LANGS.join(" · ")}                  (env PACKETSMITH_LANGUAGE)
   ${col("--theme <name>")}${THEMES.map((t) => t.name).join(" · ")}
   ${col("")}                         (env PACKETSMITH_THEME)
+  ${col("--version")}${version}
   ${col("--help")}this
 
   ${col("setup")}install the Packet Tracer MCP and the extension
