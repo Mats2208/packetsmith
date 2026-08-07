@@ -1,5 +1,0 @@
-enable
-configure terminal
-hostname SW2
-end
-write memory

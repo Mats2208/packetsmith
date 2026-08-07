@@ -74,7 +74,26 @@ for (const o of elegidos) {
     // Sin esto el binario compila igual y se rompe al primer <box>.
     plugins: [plugin],
     minify: true,
-    compile: { target, outfile: `${carpeta}/bin/${exe}` },
+    compile: {
+      target,
+      outfile: `${carpeta}/bin/${exe}`,
+      // Un binario compilado lee, EN TIEMPO DE EJECUCIÓN, el `bunfig.toml` del
+      // directorio donde lo corras — no del que se compiló. Y si ese bunfig
+      // declara un `preload` que el binario no puede resolver, se muere antes
+      // de ejecutar una línea nuestra:
+      //
+      //   error: preload not found "@opentui/solid/preload"
+      //
+      // No es un caso raro ni es "el repo de PacketSmith": le pasa a cualquiera
+      // que corra `packetsmith` parado en un proyecto Bun con preload, que es
+      // media configuración de Bun que existe. El error no menciona a
+      // PacketSmith, así que ni siquiera se sabe a quién culpar.
+      //
+      // `autoloadBunfig: false` lo desconecta: el binario se comporta igual sin
+      // importar en qué carpeta estés parado, que es lo único razonable para
+      // algo que se instala global y se corre desde cualquier lado.
+      autoloadBunfig: false,
+    },
   })
   if (!r.success) {
     for (const log of r.logs) console.error(log)
