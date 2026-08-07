@@ -117,6 +117,33 @@ describe("Chat", () => {
     const row = frame.split("\n").find((l) => l.includes("pt_a"))!
     expect(row).toContain("pt_b")
   })
+
+  test("el aviso de versión nueva llega hasta la portada", async () => {
+    // La cadena App → Chat → Welcome se rompe SIN que falle nada: se agrega la
+    // prop de un lado, se olvida pasarla del otro, y el aviso no aparece nunca.
+    // Nadie se entera, porque la ausencia de un cartel no se ve.
+    const frame = await frameOf(
+      () => Chat({
+        turns: [],
+        streaming: "",
+        busy: false,
+        actualizacion: { version: "9.9.9", comando: "npm i -g packetsmith@latest" },
+      }),
+      70,
+      34,
+    )
+
+    expect(frame).toContain("9.9.9")
+    // El comando va junto al aviso: enterarse sin saber qué tipear no sirve.
+    expect(frame).toContain("npm i -g packetsmith@latest")
+  })
+
+  test("sin versión nueva la portada no dice nada del tema", async () => {
+    // Un renglón vacío reservado "por si acaso" es ruido permanente en la
+    // pantalla que más se mira.
+    const frame = await frameOf(() => Chat({ turns: [], streaming: "", busy: false }), 70, 34)
+    expect(frame).not.toContain("npm i -g")
+  })
 })
 
 describe("Canvas", () => {

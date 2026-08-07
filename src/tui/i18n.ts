@@ -33,6 +33,8 @@ export interface Textos {
   comoInstalarMcp: string
   abriMcpBuilder: string
   atajos: string
+  /** Aviso de versión nueva. El número va aparte para poder resaltarlo. */
+  hayVersion: (v: string) => string
 
   // ── Panel de topología ───────────────────────────────────────────────────
   sinDatos: string
@@ -132,6 +134,7 @@ const es: Textos = {
   comoInstalarMcp: "claude mcp add packet-tracer -- <python> -m packet_tracer_mcp --stdio",
   abriMcpBuilder: "abrí Extensiones ▸ MCP BUILDER en Packet Tracer",
   atajos: "⏎ enviar · ⇧⏎ línea",
+  hayVersion: (v) => `↑ salió la ${v}`,
 
   sinDatos: "SIN DATOS",
   esperandoDespliegue: "esperando despliegue",
@@ -268,6 +271,7 @@ const en: Textos = {
   comoInstalarMcp: "claude mcp add packet-tracer -- <python> -m packet_tracer_mcp --stdio",
   abriMcpBuilder: "open Extensions ▸ MCP BUILDER in Packet Tracer",
   atajos: "⏎ send · ⇧⏎ newline",
+  hayVersion: (v) => `↑ ${v} is out`,
 
   sinDatos: "NO DATA",
   esperandoDespliegue: "awaiting deployment",

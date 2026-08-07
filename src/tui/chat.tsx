@@ -449,6 +449,8 @@ export function Chat(props: {
   live?: boolean
   /** Si el MCP de Packet Tracer está registrado en el CLI. */
   mcp?: boolean
+  /** Versión nueva y cómo traerla, para la pantalla de arranque. */
+  actualizacion?: { version: string; comando: string }
   /** Ancho útil para el plano. Lo calcula quien sabe cuánto mide la terminal. */
   mapWidth?: number
 }) {
@@ -468,7 +470,7 @@ export function Chat(props: {
       overflow: "hidden",
     }}>
       <Show when={vacio()}>
-        <Welcome live={props.live} mcp={props.mcp} />
+        <Welcome live={props.live} mcp={props.mcp} actualizacion={props.actualizacion} />
       </Show>
 
       <Show when={!vacio()}>

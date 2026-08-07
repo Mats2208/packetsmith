@@ -208,6 +208,20 @@ PACKETSMITH_NO_QUOTA=1 bun run src/index.tsx   # skip the lookup entirely
 PACKETSMITH_ALL_MCP=1  bun run src/index.tsx   # load every MCP server, not just Packet Tracer
 ```
 
+### Update check
+
+npm never tells an installed CLI that it went stale, so PacketSmith asks. Once every 12 hours it reads npm's `dist-tags` for this package, caches the answer in `~/.packetsmith/version.json`, and if there is something newer the start screen says so — with the command that matches how you installed it:
+
+```
+↑ 0.4.0 is out  npm i -g packetsmith@latest
+```
+
+Nothing is sent: it is a plain GET for a version number, it times out in two seconds, and no network means no notice rather than an error. **It never updates itself** — swapping the binary you are running, mid-session, is worse than being one version behind.
+
+```bash
+PACKETSMITH_NO_UPDATE_CHECK=1 packetsmith   # never ask the registry
+```
+
 ## This or the MCP?
 
 Wrong question — **PacketSmith runs the MCP underneath.** You need it either way. What changes is what sits on top:

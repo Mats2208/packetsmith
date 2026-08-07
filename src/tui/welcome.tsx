@@ -32,6 +32,14 @@ export function Welcome(props: {
   live?: boolean
   /** Si el MCP de Packet Tracer está registrado en el CLI. */
   mcp?: boolean
+  /**
+   * La versión nueva que haya salido, y qué tipear para traerla.
+   *
+   * Va acá y en ningún otro lado: la cabecera ya dice qué versión estás
+   * corriendo, y repetir el aviso arriba lo convertiría en un cartel
+   * permanente por algo que se atiende una vez.
+   */
+  actualizacion?: { version: string; comando: string }
 }) {
   return (
     <box style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>
@@ -122,6 +130,19 @@ export function Welcome(props: {
         </Show>
         <Show when={props.mcp !== false && !props.live}>
           <text style={{ fg: C.dim }}>{`  ${T.abriMcpBuilder}`}</text>
+        </Show>
+
+        {/* El aviso de versión va ÚLTIMO y en una línea sola: es la única cosa
+            de este panel que no habla de la sesión que estás por empezar. El
+            comando va al lado del aviso porque enterarse sin saber qué tipear
+            no sirve de nada. */}
+        <Show when={props.actualizacion}>
+          <text style={{ height: 1, flexShrink: 0 }}>
+            <span style={{ fg: C.brand }}>
+              {`  ${T.hayVersion(props.actualizacion!.version)}`}
+            </span>
+            <span style={{ fg: C.faint }}>{`  ${props.actualizacion!.comando}`}</span>
+          </text>
         </Show>
       </box>
     </box>

@@ -22,6 +22,7 @@ import { dialog, hayDialogo, Picker, registrarPaleta } from "./picker.tsx"
 import { comandoPorTitulo, findCommand, opcionesDeComandos, type CommandCtx } from "./commands.ts"
 import { aplicarEfectos } from "./effects.ts"
 import { limpiarPestana, ponerProgreso, ponerTitulo } from "./titulo.ts"
+import { comoActualizar, versionNueva } from "../version.ts"
 import { guardarModelo, modeloDe, saveConfig } from "../config.ts"
 import pkg from "../../package.json" with { type: "json" }
 import { hayCredencial, planElegido, setApiKey, setOauth, setPlan } from "../auth.ts"
@@ -193,6 +194,21 @@ export function App(props: {
       setElapsed(Date.now() - startedAt())
     }, BEAT_MS)
     onCleanup(() => clearInterval(id))
+  })
+
+  // ¿Salió una versión nueva? Se pregunta una sola vez, al montar, y el
+  // resultado puede tardar o no llegar nunca: `versionNueva` contesta con el
+  // disco si tiene una respuesta guardada, así que en la práctica el aviso que
+  // ves es el de la consulta del arranque anterior.
+  //
+  // Va con `props.columns` apagado como todo lo que toca el mundo exterior: un
+  // test no tiene por qué pegarle al registro de npm para dibujar una portada.
+  const [novedad, setNovedad] = createSignal<{ version: string; comando: string }>()
+  onMount(() => {
+    if (props.columns) return
+    void versionNueva(pkg.version)
+      .then((v) => v && setNovedad({ version: v, comando: comoActualizar() }))
+      .catch(() => {})
   })
 
   // El título de la pestaña. Se cuelga de la fase porque lo que uno quiere
@@ -686,6 +702,7 @@ export function App(props: {
           liveTools={live()}
           live={bridgeLive()}
           mcp={mcpReady}
+          actualizacion={novedad()}
           // Lo que sobra después del panel, los márgenes del chat y la canaleta
           // del mensaje. Si sobra menos de 30 el plano no se dibuja: mejor nada
           // que un plano con nodos cortados.
