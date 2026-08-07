@@ -21,7 +21,22 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Las actions van en su major actual, que es el que corre sobre Node 24.
+      #
+      # Los que estaban —checkout@v4, setup-node@v4, action-gh-release@v2—
+      # declaran `using: node20` en su `action.yml`, y GitHub ya los venía
+      # forzando a Node 24 con un aviso en cada run. Cuando deje de forzarlos, el
+      # release se cae, y se va a caer justo el día que quieras publicar algo.
+      #
+      # Los breaking changes del camino no tocan nada de acá: el cacheo
+      # automático de setup-node v5 se activa sólo si `package.json` declara
+      # `packageManager`, y este no lo hace —además acá se instala con Bun, y
+      # setup-node está sólo para escribir el .npmrc del registro.
+      #
+      # `setup-bun` se queda en v2 A PROPÓSITO: su action.yml ya dice node24, y
+      # es el único de los cuatro que nunca estuvo en el aviso. Subirlo "por
+      # consistencia" sería cambiar lo único que no tiene nada roto.
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
@@ -52,7 +67,7 @@ jobs:
           done
           ls -la *.tar.gz *.zip
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: |
@@ -67,7 +82,7 @@ jobs:
       # release. O sea que el run figuraba en rojo con el trabajo hecho.
       #
       # Publicar acá evita el viaje de ida y vuelta entero.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: ${{ vars.PUBLISH_NPM == 'true' }}
         with:
           node-version: 22
