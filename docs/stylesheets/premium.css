@@ -1,0 +1,272 @@
+/* PacketSmith docs — capa premium sobre mkdocs-material.
+ *
+ * Material por defecto se reconoce a un metro: índigo saturado, Roboto, y un
+ * slate que es azul, no negro. Esto lo lleva a casi-monocromo con Geist, que es
+ * lo que hace que unos docs se lean caros sin decorar nada.
+ *
+ * `font: false` en mkdocs.yml es obligatorio para que esto mande: si Material
+ * carga Roboto, gana el suyo por orden de cascada. */
+
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&display=swap");
+
+:root {
+  --md-text-font: "Geist";
+  --md-code-font: "Geist Mono";
+}
+
+/* Los colores van en `body`, NO en `:root`.
+ *
+ * Material escribe `data-md-color-primary="indigo"` en el <body>, y esa regla
+ * define --md-primary-fg-color ahí mismo. Una custom property definida en body
+ * le gana por herencia a la misma property definida en :root, para todo lo que
+ * cuelga de body — que es la página entera. Puesto en :root, esto se ignora y
+ * los enlaces salen índigo. */
+body {
+  /* Casi-monocromo. El acento aparece en enlaces y nav activa, en ningún fondo. */
+  --md-primary-fg-color: #09090b;
+  --md-primary-fg-color--light: #3f3f46;
+  --md-primary-fg-color--dark: #09090b;
+  --md-primary-bg-color: #ffffff;
+  --md-accent-fg-color: #18181b;
+
+  --md-default-bg-color: #ffffff;
+  --md-default-fg-color: #09090b;
+  --md-default-fg-color--light: rgba(0, 0, 0, 0.7);
+  --md-default-fg-color--lighter: rgba(0, 0, 0, 0.32);
+
+  --ps-hairline: rgba(0, 0, 0, 0.06);
+  --ps-border-card: rgba(0, 0, 0, 0.1);
+  --ps-surface: rgba(0, 0, 0, 0.02);
+}
+
+body[data-md-color-scheme="slate"] {
+  /* #09090b y no #000: el negro puro se lee duro y barato. */
+  --md-default-bg-color: #09090b;
+  --md-default-fg-color: #fafafa;
+  --md-default-fg-color--light: rgba(255, 255, 255, 0.7);
+  --md-default-fg-color--lighter: rgba(255, 255, 255, 0.32);
+
+  --md-primary-fg-color: #09090b;
+  --md-primary-bg-color: #fafafa;
+  --md-accent-fg-color: #fafafa;
+  --md-typeset-a-color: #fafafa;
+
+  --md-code-bg-color: #121215;
+  --md-code-fg-color: #e4e4e7;
+
+  --ps-hairline: rgba(255, 255, 255, 0.06);
+  --ps-border-card: rgba(255, 255, 255, 0.1);
+  --ps-surface: rgba(255, 255, 255, 0.03);
+}
+
+/* El color de enlace necesita su propia regla, y con dos atributos.
+ *
+ * Material lo define en `[data-md-color-scheme=slate][data-md-color-primary=indigo]`
+ * — especificidad (0,2,0) — que le gana a `body[data-md-color-scheme=slate]`,
+ * que es (0,1,1). Sin igualar el peso, el tema entero queda monocromo y los
+ * enlaces siguen saliendo índigo: medido, el valor computado era #5488e8 con
+ * --md-primary-fg-color ya en #09090b.
+ *
+ * `[data-md-color-primary]` sin valor iguala sea cual sea el primario que
+ * Material tenga puesto, así que esto no se rompe si algún día se cambia. */
+body[data-md-color-scheme="default"][data-md-color-primary] {
+  --md-typeset-a-color: #09090b;
+}
+
+body[data-md-color-scheme="slate"][data-md-color-primary] {
+  --md-typeset-a-color: #fafafa;
+}
+
+/* --- Ritmo y medida ------------------------------------------------------ */
+
+.md-grid {
+  max-width: 74rem;
+}
+
+/* ~760px de columna de texto. Una línea de 90+ caracteres cansa y se nota. */
+.md-content__inner {
+  max-width: 48rem;
+  margin-inline: auto;
+  padding-bottom: 4rem;
+}
+
+.md-typeset {
+  line-height: 1.7;
+}
+
+/* --- Tipografía ---------------------------------------------------------- */
+
+.md-typeset h1 {
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  color: var(--md-default-fg-color);
+  margin-bottom: 1.5rem;
+}
+
+.md-typeset h2 {
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--ps-hairline);
+}
+
+.md-typeset h3 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 2rem;
+}
+
+.md-typeset h1 + h2 {
+  border-top: none;
+  margin-top: 1rem;
+  padding-top: 0;
+}
+
+/* --- Cromo --------------------------------------------------------------- */
+
+.md-header {
+  background-color: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  border-bottom: 1px solid var(--ps-hairline);
+  box-shadow: none;
+}
+
+.md-tabs {
+  background-color: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+/* Glass: translúcido + blur, con hairline. El detalle que casi no se nota. */
+.md-search__form {
+  background-color: var(--ps-surface);
+  border: 1px solid var(--ps-border-card);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: none;
+}
+
+.md-search__form:hover {
+  background-color: var(--ps-surface);
+  border-color: var(--md-default-fg-color--lighter);
+}
+
+.md-search__input::placeholder {
+  color: var(--md-default-fg-color--lighter);
+}
+
+.md-nav__title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: var(--md-default-fg-color);
+}
+
+.md-footer {
+  background-color: var(--md-default-bg-color);
+  border-top: 1px solid var(--ps-hairline);
+}
+
+.md-footer-meta {
+  background-color: transparent;
+}
+
+.md-footer__link:hover {
+  opacity: 0.7;
+}
+
+.md-copyright {
+  color: var(--md-default-fg-color--lighter);
+}
+
+/* --- Bloques ------------------------------------------------------------- */
+
+.md-typeset table:not([class]) {
+  border: 1px solid var(--ps-border-card);
+  border-radius: 10px;
+  box-shadow: none;
+  font-size: 0.75rem;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--ps-surface);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset table:not([class]) td {
+  border-top: 1px solid var(--ps-hairline);
+}
+
+.md-typeset pre > code,
+.md-typeset .highlight {
+  border-radius: 10px;
+}
+
+.md-typeset code {
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+/* Callouts en gris, con barra izquierda. Material los pinta de colores fuertes
+ * y con fondo saturado; acá organizan sin gritar. */
+.md-typeset .admonition,
+.md-typeset details {
+  border: 1px solid var(--ps-border-card);
+  border-left: 2px solid var(--md-default-fg-color--lighter);
+  border-radius: 10px;
+  box-shadow: none;
+  font-size: 0.75rem;
+  background-color: var(--ps-surface);
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  background-color: transparent;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset .admonition-title::before,
+.md-typeset summary::before {
+  background-color: var(--md-default-fg-color--light);
+}
+
+.md-typeset blockquote {
+  border-left: 2px solid var(--ps-border-card);
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset hr {
+  border-bottom: 1px solid var(--ps-hairline);
+}
+
+.md-typeset a {
+  text-underline-offset: 3px;
+}
+
+.md-typeset a:hover {
+  text-decoration: underline;
+}
+
+/* --- Marca --------------------------------------------------------------- */
+
+.md-header__title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* El logo NO se invierte. `invert(1)` da vuelta el matiz además de la
+ * luminosidad, y el diamante azul salía naranja en modo claro. El ícono ya es
+ * una teja con su propio fondo, así que se sostiene contra las dos cabeceras. */
+.md-header__button.md-logo img {
+  border-radius: 6px;
+}

@@ -1,0 +1,102 @@
+site_name: PacketSmith
+# La descripción es la meta description que Google muestra bajo el título, así que
+# apunta a las consultas que el MCP NO tiene: "terminal agent", "automate", "TUI".
+# Competir con MCP-Packet-Tracer por "mcp packet tracer" sería canibalizar un
+# resultado que ya es primero.
+site_description: Terminal agent for Cisco Packet Tracer. Describe a network in plain language and watch the topology build itself — OSPF, VLANs, DHCP and real ping verification, in a split-screen TUI.
+site_url: https://mats2208.github.io/packetsmith/
+site_author: Mats2208
+repo_url: https://github.com/Mats2208/packetsmith
+repo_name: Mats2208/packetsmith
+edit_uri: edit/main/docs/
+copyright: MIT © 2026 Mateo (Mats2208)
+
+theme:
+  name: material
+  language: en
+  # Fuera de docs/ a propósito: lo que vive ahí se copia al sitio publicado, y
+  # una plantilla Jinja servida como archivo estático no le sirve a nadie.
+  custom_dir: overrides
+  font: false # Geist se carga desde premium.css; el loader de Material solo trae Roboto.
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+  favicon: icon.png
+  logo: icon.png
+
+extra_css:
+  - stylesheets/premium.css
+
+# Viven en docs/ pero no son el sitio: uno es la fuente del banner y el otro las
+# dependencias del build. Sin esto se publican tal cual en la raíz.
+exclude_docs: |
+  requirements.txt
+  banner.html
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.keys
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Mats2208/packetsmith
+    - icon: fontawesome/brands/npm
+      link: https://www.npmjs.com/package/packetsmith
+  # El servidor que PacketSmith corre por debajo. Va en el footer de cada página:
+  # el enlace entre los dos proyectos no debería depender de que alguien llegue al README.
+  generator: false
+
+nav:
+  - Home: README.md
+  - Using it:
+      - Getting started: getting-started.md
+      - Commands: commands.md
+      - Providers and plans: providers.md
+      - Themes and contrast: themes.md
+      - Troubleshooting: troubleshooting.md
+  - How it works:
+      - Architecture: architecture.md
+      - The system prompt: prompt.md
+      - Development: development.md

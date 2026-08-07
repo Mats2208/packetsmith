@@ -1,3 +1,7 @@
+---
+description: Build, test and extend PacketSmith: the test suite, the OpenTUI traps that tsc cannot see, and how to add an engine or a provider.
+---
+
 # Development
 
 ```bash

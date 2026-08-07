@@ -1,3 +1,7 @@
+---
+description: The system prompt PacketSmith gives its agent — what the model is told about driving Packet Tracer, and what it is deliberately not told.
+---
+
 # The system prompt
 
 One file, `src/engine/prompt.ts`, 53 lines. It is short on purpose: every line in it earned

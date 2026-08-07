@@ -1,3 +1,7 @@
+---
+description: Run PacketSmith on Claude, Kimi, OpenAI, DeepSeek, Z.AI, Groq or OpenRouter: ~150 providers, three wire protocols, and per-plan usage meters.
+---
+
 # Providers and plans
 
 ## A provider is not an endpoint

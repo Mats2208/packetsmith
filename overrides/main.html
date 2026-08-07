@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+<!--
+  Open Graph y Twitter card a mano.
+
+  El plugin `social` de Material genera tarjetas lindas pero arrastra cairo y
+  pillow al runner, y acá alcanza con apuntar al banner que ya existe. Sin esto,
+  un enlace pegado en cualquier lado sale sin imagen y sin descripción propia:
+  la miniatura es la mitad de la razón por la que alguien hace clic.
+-->
+{% block extrahead %}
+  {% set page_title = config.site_name %}
+  {% if page and page.title and not page.is_homepage %}
+    {% set page_title = page.title ~ " — " ~ config.site_name %}
+  {% endif %}
+  {% set page_description = config.site_description %}
+  {% if page and page.meta and page.meta.description %}
+    {% set page_description = page.meta.description %}
+  {% endif %}
+  {% set card = config.site_url ~ "banner.png" %}
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ page_description }}">
+  <meta property="og:image" content="{{ card }}">
+  {% if page and page.canonical_url %}
+  <meta property="og:url" content="{{ page.canonical_url }}">
+  {% endif %}
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page_title }}">
+  <meta name="twitter:description" content="{{ page_description }}">
+  <meta name="twitter:image" content="{{ card }}">
+{% endblock %}

@@ -1,3 +1,7 @@
+---
+description: Why pt_* tools answer that Packet Tracer is not connected, which process owns the bridge port, and the other failures that are not obvious.
+---
+
 # Troubleshooting
 
 Every entry here was a real failure. Most of them were quiet, which is why they are worth
@@ -88,5 +92,6 @@ Spanish is in no language at all.
 
 If you are editing the UI: nothing placed **after** a `scrollbox` is ever drawn — the
 scrollbox takes all the remaining height. The status bar goes above it, always. There are
-five more traps like this in [AGENTS.md](../AGENTS.md), each one measured, and none of
-them visible to `tsc`.
+five more traps like this in
+[AGENTS.md](https://github.com/Mats2208/packetsmith/blob/main/AGENTS.md), each one measured,
+and none of them visible to `tsc`.

@@ -1,3 +1,7 @@
+---
+description: How PacketSmith works: two engine classes, the MCP tool loop, and why the topology panel is derived from real tool results instead of dictated by the model.
+---
+
 # Architecture
 
 ## Two kinds of engine

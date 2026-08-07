@@ -1,0 +1,58 @@
+# Publica docs/ en GitHub Pages.
+#
+# Este repo corre con Bun, pero mkdocs es Python: la dependencia vive sólo acá,
+# en el runner, y no entra ni al package.json ni al bun.lock.
+#
+# Las actions van en su major actual por la misma razón que en release.yml: las
+# de la serie anterior declaran `using: node20` y GitHub ya las venía forzando a
+# Node 24 con un aviso. Cuando deje de forzarlas, el workflow se cae solo.
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un despliegue a la vez, y sin cancelar el que está a mitad de camino: cancelar
+# un deploy de Pages puede dejar el sitio servido a medias.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+      - run: pip install -r docs/requirements.txt
+      # --strict convierte en error un enlace roto o una página fuera del nav.
+      # Estos docs se escribieron para leerse en GitHub, donde un enlace muerto
+      # no rompe nada y por eso no se nota; acá tiene que romper.
+      - run: mkdocs build --strict --site-dir _site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

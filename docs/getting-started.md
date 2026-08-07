@@ -1,3 +1,7 @@
+---
+description: Install PacketSmith, connect a provider, and build your first Cisco Packet Tracer topology from a plain-language prompt.
+---
+
 # Getting started
 
 ## What you need

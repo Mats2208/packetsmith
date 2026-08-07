@@ -1,0 +1,4 @@
+# Acotado al major 9 a propósito. El propio Material avisa que MkDocs 2.0 rompe
+# el sistema de plugins y el de overrides sin camino de migración, y este sitio
+# usa un override. Un build desatendido no debería enterarse de eso solo.
+mkdocs-material>=9.5,<10

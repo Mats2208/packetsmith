@@ -9,6 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OpenTUI](https://img.shields.io/badge/OpenTUI-Solid-4051B5?style=flat-square)](https://github.com/sst/opentui)
 [![MCP](https://img.shields.io/badge/protocol-MCP-00B4D8?style=flat-square)](https://modelcontextprotocol.io)
+[![Docs](https://img.shields.io/badge/docs-mats2208.github.io-4051B5?style=flat-square&logo=materialformkdocs&logoColor=white)](https://mats2208.github.io/packetsmith/)
 [![Tests](https://img.shields.io/badge/tests-367%20passing-3fb950?style=flat-square)](test/)
 [![License](https://img.shields.io/github/license/Mats2208/packetsmith?style=flat-square&color=green)](LICENSE)
 
@@ -278,11 +279,16 @@ Every engine emits the same `AgentEvent` union, so the UI never knows which one 
 of the `pt_*` tools — the agent is never asked to emit a structured block for it. So a
 device the model says it created but did not, does not appear.
 
-**Full documentation lives in [`docs/`](docs/)** — [getting started](docs/getting-started.md),
-[commands](docs/commands.md), [providers and plans](docs/providers.md),
-[architecture](docs/architecture.md), [the system prompt](docs/prompt.md),
-[themes](docs/themes.md), [development](docs/development.md),
-[troubleshooting](docs/troubleshooting.md).
+**Full documentation → [mats2208.github.io/packetsmith](https://mats2208.github.io/packetsmith/)**
+— [getting started](https://mats2208.github.io/packetsmith/getting-started/),
+[commands](https://mats2208.github.io/packetsmith/commands/),
+[providers and plans](https://mats2208.github.io/packetsmith/providers/),
+[architecture](https://mats2208.github.io/packetsmith/architecture/),
+[the system prompt](https://mats2208.github.io/packetsmith/prompt/),
+[themes](https://mats2208.github.io/packetsmith/themes/),
+[development](https://mats2208.github.io/packetsmith/development/),
+[troubleshooting](https://mats2208.github.io/packetsmith/troubleshooting/).
+The same pages are in [`docs/`](docs/) if you would rather read them here.
 
 ### Measured, not assumed
 

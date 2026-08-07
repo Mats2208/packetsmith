@@ -1,3 +1,7 @@
+---
+description: The 13 terminal themes in PacketSmith, the colour roles behind them, and the contrast ratios enforced as a test rather than promised.
+---
+
 # Themes and contrast
 
 `/theme` switches palette live as you scroll, and reverts if you press Esc. Whatever you

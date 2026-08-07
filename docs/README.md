@@ -1,3 +1,7 @@
+---
+description: PacketSmith documentation — a terminal agent that builds Cisco Packet Tracer topologies from plain language. Install, commands, providers, themes and architecture.
+---
+
 # PacketSmith — documentation
 
 Everything here is written against code that exists. When a number appears — a latency, a
@@ -22,7 +26,8 @@ token count, a contrast ratio — it was measured, and the page says how it was 
 | [Development](development.md) | tests, conventions, where to add things |
 
 For instructions aimed at AI agents working on this repository, see
-[AGENTS.md](../AGENTS.md) — it carries the traps and the measurements, not the tutorials.
+[AGENTS.md](https://github.com/Mats2208/packetsmith/blob/main/AGENTS.md) — it carries the
+traps and the measurements, not the tutorials.
 
 ## The three ideas
 

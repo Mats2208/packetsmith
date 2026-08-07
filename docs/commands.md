@@ -1,3 +1,7 @@
+---
+description: Every PacketSmith command behind the slash palette — engine, model, effort, theme, topology, export — and what each one changes without a restart.
+---
+
 # Commands
 
 Press <kbd>/</kbd> on an empty prompt, or <kbd>Ctrl</kbd>+<kbd>P</kbd> at any time.
